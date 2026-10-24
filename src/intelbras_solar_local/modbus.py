@@ -6,6 +6,7 @@ clashes with the ``pymodbus`` version pinned by Home Assistant.
 from __future__ import annotations
 
 import asyncio
+import random
 import struct
 
 from .const import (
@@ -17,6 +18,10 @@ from .const import (
 from .exceptions import IntelbrasSolarConnectionError, IntelbrasSolarProtocolError
 
 _MBAP = struct.Struct(">HHHB")
+
+
+class _FramingError(Exception):
+    """Malformed frame; the connection must be reopened to resync."""
 
 
 class ModbusTcpClient:
@@ -35,7 +40,9 @@ class ModbusTcpClient:
         self.timeout = timeout
         self._reader: asyncio.StreamReader | None = None
         self._writer: asyncio.StreamWriter | None = None
-        self._tid = 0
+        # Random start: the WiNet-S can leak replies across concurrent clients,
+        # and two clients both counting from 1 would accept each other's frames.
+        self._tid = random.randrange(0x10000)
         # The WiNet-S serves one request at a time; serialize every call.
         self._lock = asyncio.Lock()
 
@@ -59,8 +66,13 @@ class ModbusTcpClient:
             Mapping of register address to its unsigned 16-bit value.
         """
         body = await self._request(struct.pack(">BHH", function, address, count))
-        size = body[1]
-        values = struct.unpack(f">{size // 2}H", body[2 : 2 + size])
+        if body[0] != function or len(body) != 2 + count * 2 or body[1] != count * 2:
+            # A reply to some other request: the stream is out of sync.
+            await self.async_close()
+            raise IntelbrasSolarProtocolError(
+                f"Modbus reply does not match function {function} x {count} registers"
+            )
+        values = struct.unpack(f">{count}H", body[2:])
         return {address + i: v for i, v in enumerate(values)}
 
     async def async_write(self, address: int, value: int) -> None:
@@ -75,6 +87,11 @@ class ModbusTcpClient:
                 await self.async_close()
                 raise IntelbrasSolarConnectionError(
                     f"Modbus {self.host}:{self.port}: {err!r}"
+                ) from err
+            except _FramingError as err:
+                await self.async_close()
+                raise IntelbrasSolarProtocolError(
+                    f"Modbus {self.host}:{self.port}: {err}"
                 ) from err
         if body[0] & 0x80:
             raise IntelbrasSolarProtocolError(
@@ -93,6 +110,8 @@ class ModbusTcpClient:
         await self._writer.drain()
         while True:
             tid, _, length, _ = _MBAP.unpack(await self._reader.readexactly(7))
+            if length < 3:
+                raise _FramingError(f"bad MBAP length {length}")
             body = await self._reader.readexactly(length - 1)
             # Drop late replies to a request that already timed out.
             if tid == self._tid:

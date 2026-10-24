@@ -34,3 +34,19 @@ async def test_unreachable_raises_connection_error(inverter):
     client = ModbusTcpClient("127.0.0.1", port, timeout=1)
     with pytest.raises(IntelbrasSolarConnectionError):
         await client.async_read(4, 5000, 1)
+
+
+async def test_garbage_frames_raise_protocol_error_and_resync(inverter):
+    client = ModbusTcpClient("127.0.0.1", inverter.port)
+    inverter.garbage = ["short_mbap", "wrong_count"]
+    with pytest.raises(IntelbrasSolarProtocolError, match="MBAP length"):
+        await client.async_read(4, 5000, 3)
+    with pytest.raises(IntelbrasSolarProtocolError, match="does not match"):
+        await client.async_read(4, 5000, 3)
+    assert await client.async_read(4, 5000, 1) == {5000: 50}
+    await client.async_close()
+
+
+def test_transaction_ids_start_randomly():
+    starts = {ModbusTcpClient("127.0.0.1")._tid for _ in range(20)}
+    assert len(starts) > 1

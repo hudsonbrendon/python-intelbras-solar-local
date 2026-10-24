@@ -31,6 +31,12 @@ asyncio.run(main())
 To share an `aiohttp.ClientSession`, as Home Assistant does, pass `session=`. The client then leaves the session open
 when it closes.
 
+## One client at a time
+
+The WiNet-S datalogger serves Modbus TCP poorly to concurrent clients: requests time out, and replies can arrive
+malformed. The client raises `IntelbrasSolarProtocolError` for malformed replies and reopens the connection, so a bad
+reply never turns into wrong data. Even so, keep one Modbus client per datalogger.
+
 ## Controls
 
 !!! warning

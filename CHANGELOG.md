@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented here.
 
+## [0.1.1] - 2026-10-24
+
+### Fixed
+- Malformed or mismatched Modbus replies now raise `IntelbrasSolarProtocolError`
+  and reopen the connection. Before, a bare `IndexError`/`ValueError` escaped.
+  The WiNet-S produced such frames when two clients polled at the same time
+  (observed on the real IONS-5K M5): bad MBAP length, wrong function code,
+  wrong byte count.
+- The Modbus transaction id now starts at a random value, so two concurrent
+  clients no longer accept each other's replies.
+
 ## [0.1.0] - 2026-10-24
 
 ### Added

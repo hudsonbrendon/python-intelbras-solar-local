@@ -44,6 +44,8 @@ class FakeInverter:
         self.input = dict(INPUT)
         self.holding = dict(HOLDING)
         self.writes: list[tuple[int, int, int]] = []
+        # Next replies to corrupt: "short_mbap" or "wrong_count".
+        self.garbage: list[str] = []
         self.port = 0
         self._server: asyncio.base_events.Server | None = None
 
@@ -76,6 +78,14 @@ class FakeInverter:
                 body = pdu
             else:
                 body = bytes([fc | 0x80, 1])
+            if self.garbage:
+                mode = self.garbage.pop(0)
+                if mode == "short_mbap":
+                    writer.write(struct.pack(">HHHB", tid, 0, 0, unit))
+                    await writer.drain()
+                    continue
+                if mode == "wrong_count":
+                    body = bytes([fc, 2, 0, 1])
             writer.write(struct.pack(">HHHB", tid, 0, len(body) + 1, unit) + body)
             await writer.drain()
         writer.close()
