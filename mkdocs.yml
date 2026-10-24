@@ -1,0 +1,50 @@
+site_name: python-intelbras-solar-local
+site_description: Async Python client for Intelbras solar inverters (Sungrow WiNet-S) over the LAN
+site_url: https://hudsonbrendon.github.io/python-intelbras-solar-local/
+repo_url: https://github.com/hudsonbrendon/python-intelbras-solar-local
+repo_name: hudsonbrendon/python-intelbras-solar-local
+docs_dir: docs
+theme:
+  name: material
+  logo: assets/icon.png
+  favicon: assets/icon.png
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle: {icon: material/weather-night, name: Switch to dark mode}
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle: {icon: material/weather-sunny, name: Switch to light mode}
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+    - search.highlight
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            heading_level: 2
+            members_order: source
+            separate_signature: true
+            show_signature_annotations: true
+markdown_extensions:
+  - admonition
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.snippets
+  - toc:
+      permalink: true
+nav:
+  - Home: index.md
+  - Usage: usage.md
+  - Protocol: protocol.md
+  - API reference: api.md
+  - Changelog: changelog.md
