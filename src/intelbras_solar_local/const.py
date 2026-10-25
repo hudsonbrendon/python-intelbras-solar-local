@@ -23,6 +23,19 @@ FC_WRITE_SINGLE = 6
 INPUT_BLOCKS: tuple[tuple[int, int], ...] = ((4989, 61), (5050, 100), (5225, 2))
 HOLDING_BLOCKS: tuple[tuple[int, int], ...] = ((4999, 9),)
 
+# Inverter firmware: ARM at 5799 and DSP at 5814, 15 ASCII registers each.
+# Read once: the WiNet-S answers blocks that touch unmapped registers with an
+# empty frame, so this stays out of the per-poll blocks.
+FIRMWARE_BLOCK = (5799, 30)
+
+# Datalogger web UI (port 80): read-only endpoints, authenticated by the token
+# handed out by the WebSocket ``connect`` service.
+WINET_HTTP_ABOUT = "/about/list"
+WINET_HTTP_OVERVIEW = "/device/overview"
+WINET_HTTP_PARAMS = "/device/getParam"
+WINET_HTTP_WIFI_SCAN = "/wifi/updateStaScan"
+WIFI_SCAN_TIMEOUT = 20
+
 # Writable holding registers
 REG_CLOCK = 4999  # year, month, day, hour, minute, second (6 registers)
 REG_START_STOP = 5005

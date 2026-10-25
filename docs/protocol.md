@@ -25,7 +25,22 @@ The server also pushes unsolicited `notice` messages, so match each reply on its
 | `statistics` / `runtime` | Daily and total energy, current power, adjustable P/Q limits |
 | `state` | `total_fault`, `total_alarm`, `wifi_conn_sts`, `cloud_conn_sts` |
 | `fault` | Active fault list |
+| `stalist` | After a scan: `curr_ssid`, `curr_signal` (dBm) and the visible APs. Before a scan it returns `result_code` 208 |
 | `real_battery`, `deviceInfo` | `result_code` 211/215 on this model (not supported) |
+
+## Web UI HTTP (port 80)
+
+These endpoints take `token` (from the WebSocket `connect`), `lang` and `time123456` as query parameters. They answer
+JSON with a `text/html` content type.
+
+| Endpoint | Data |
+|---|---|
+| `GET /about/list` | Datalogger serial, application version (`WIFI-SV300.001.03.P002`), build version, hardware version |
+| `GET /device/overview` | Module serial and hardware version, Wi-Fi/Ethernet link, cloud server (`app.isolarcloud.com`), clock, timezone, inverter country |
+| `POST /wifi/updateStaScan` (`sta_scan=1`) | Starts a station scan (the web UI refresh button); read the result with the `stalist` WebSocket service |
+| `GET /device/getParam?type=2&dev_id&dev_type&dev_code` | 29 grid-protection parameters with value, unit, range and register address (32313–32384) |
+| `GET /device/getParam?type=0` | Country / grid-code catalogue |
+| `GET /wifi/listAP`, `/time/get`, `/serial/list`, `/transmit/list`, `/4g/list` | Hotspot SSID, NTP settings, COM port, IEC 104 / third-party cloud forwarding, APN |
 
 ## Modbus TCP (port 502, unit 1)
 
@@ -58,6 +73,8 @@ first.
 | 5143 U32 | Total energy (high resolution) | 0.1 kWh |
 | 5146 / 5147 | Bus voltage / grid frequency | 0.1 V / 0.01 Hz |
 | 5225 U32 | Yearly energy (inferred) | 0.1 kWh |
+| 5799–5813 | ARM firmware, ASCII (`ARM_SUNSTONE-S_V11_V01_A`) | |
+| 5814–5828 | DSP firmware, ASCII (`MDSP_SUNSTONE-S_V11_V01_A`) | |
 
 ### Holding registers (FC3 read, FC6 write)
 
@@ -68,7 +85,8 @@ first.
 | 5006 | Power limitation: `0xAA` on, `0x55` off |
 | 5007 | Power limit in 0.1 % |
 
-On this unit, a block read of the holding registers fails with exception 4 once it reaches register 5019.
+Reads that touch unmapped input registers (for example 4900–4988 or 6000–6400) get an empty frame (MBAP length 2)
+instead of a Modbus exception, and the client raises `IntelbrasSolarProtocolError`. On this unit, a block read of the holding registers fails with exception 4 once it reaches register 5019.
 
 ## Not verified
 

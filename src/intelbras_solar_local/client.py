@@ -15,6 +15,7 @@ from .const import (
     ENABLE,
     FC_READ_HOLDING,
     FC_READ_INPUT,
+    FIRMWARE_BLOCK,
     HOLDING_BLOCKS,
     INPUT_BLOCKS,
     REG_CLOCK,
@@ -26,7 +27,14 @@ from .const import (
 )
 from .exceptions import IntelbrasSolarError
 from .modbus import ModbusTcpClient
-from .models import InverterStatus, parse_registers
+from .models import (
+    DataloggerInfo,
+    GridParameter,
+    InverterStatus,
+    WifiSignal,
+    parse_firmware,
+    parse_registers,
+)
 from .winet import WiNetClient
 
 _LOGGER = logging.getLogger(__name__)
@@ -62,6 +70,7 @@ class IntelbrasSolarClient:
         self._session = session
         self._owns_session = session is None
         self.modbus = ModbusTcpClient(host, port, unit)
+        self._firmware: tuple[str | None, str | None] | None = None
 
     async def __aenter__(self) -> IntelbrasSolarClient:
         return self
@@ -101,7 +110,20 @@ class IntelbrasSolarClient:
             inp |= await self.modbus.async_read(FC_READ_INPUT, start, count)
         for start, count in HOLDING_BLOCKS:
             hold |= await self.modbus.async_read(FC_READ_HOLDING, start, count)
-        return parse_registers(inp, hold)
+        status = parse_registers(inp, hold)
+        status.arm_firmware, status.dsp_firmware = await self._async_firmware()
+        return status
+
+    async def _async_firmware(self) -> tuple[str | None, str | None]:
+        """ARM/DSP versions, read once; a failed read is retried next poll."""
+        if self._firmware is None:
+            try:
+                regs = await self.modbus.async_read(FC_READ_INPUT, *FIRMWARE_BLOCK)
+            except IntelbrasSolarError as err:
+                _LOGGER.debug("Firmware registers unavailable: %s", err)
+                return None, None
+            self._firmware = parse_firmware(regs)
+        return self._firmware
 
     async def async_get_status(self) -> InverterStatus:
         """Modbus snapshot plus datalogger state (``datalogger`` may be None).
@@ -114,6 +136,18 @@ class IntelbrasSolarClient:
         except IntelbrasSolarError as err:
             _LOGGER.debug("WiNet datalogger read failed: %s", err)
         return status
+
+    async def async_get_datalogger_info(self) -> DataloggerInfo:
+        """Datalogger serial, firmware/hardware versions and network links."""
+        return await self.winet.async_get_info()
+
+    async def async_get_wifi_signal(self) -> WifiSignal:
+        """Joined Wi-Fi network and RSSI (runs a ~3 s station scan)."""
+        return await self.winet.async_get_wifi_signal()
+
+    async def async_get_grid_parameters(self) -> list[GridParameter]:
+        """Grid-protection thresholds and trip times."""
+        return await self.winet.async_get_grid_parameters()
 
     async def async_set_inverter_on(self, on: bool) -> None:
         """Start (``True``) or stop (``False``) power generation."""

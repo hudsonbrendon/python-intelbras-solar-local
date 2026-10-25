@@ -45,6 +45,38 @@ class DataloggerStatus:
 
 
 @dataclass
+class DataloggerInfo:
+    """Identity and network details of the WiNet-S (rarely change)."""
+
+    serial: str | None = None
+    firmware_version: str | None = None
+    build_version: str | None = None
+    hardware_version: str | None = None
+    cloud_server: str | None = None
+    timezone: str | None = None
+    wifi_connected: bool | None = None
+    ethernet_connected: bool | None = None
+
+
+@dataclass
+class WifiSignal:
+    """Wi-Fi network the datalogger is joined to, from a station scan."""
+
+    ssid: str | None
+    rssi: int | None  # dBm
+
+
+@dataclass
+class GridParameter:
+    """One grid-protection setting of the inverter (read-only here)."""
+
+    key: str
+    value: float | str | None
+    unit: str | None
+    register: int | None
+
+
+@dataclass
 class InverterStatus:
     """Snapshot of the inverter at a point in time.
 
@@ -80,6 +112,8 @@ class InverterStatus:
     power_limit: float | None = None  # %
     clock: datetime | None = None
     mppts: list[Mppt] = field(default_factory=list)
+    arm_firmware: str | None = None
+    dsp_firmware: str | None = None
     datalogger: DataloggerStatus | None = None
 
     @property
@@ -186,3 +220,73 @@ def parse_datalogger(
         faults=list(faults.get("list") or []),
     )
 
+
+
+def _ascii(regs: dict[int, int], start: int, count: int) -> str | None:
+    addresses = range(start, start + count)
+    raw = b"".join(struct.pack(">H", regs.get(a, 0)) for a in addresses)
+    text = raw.decode("ascii", "ignore").strip("\x00 ")
+    return text or None
+
+
+def parse_firmware(regs: dict[int, int]) -> tuple[str | None, str | None]:
+    """ARM and DSP firmware versions from the ``FIRMWARE_BLOCK`` registers."""
+    return _ascii(regs, 5799, 15), _ascii(regs, 5814, 15)
+
+
+def _labelled(items: list[dict[str, Any]]) -> dict[str, str]:
+    """Map ``I18N_COMMON_*`` ``data_name`` keys to their values."""
+    return {
+        str(i.get("data_name", "")).removeprefix("I18N_COMMON_"): i.get("data_value")
+        for i in items
+    }
+
+
+def parse_datalogger_info(
+    about: dict[str, Any], overview: dict[str, Any]
+) -> DataloggerInfo:
+    """Build a :class:`DataloggerInfo` from ``/about/list`` and ``/device/overview``."""
+    labels = _labelled(about.get("list") or [])
+    module = overview.get("module_info") or {}
+    net = overview.get("net_info") or {}
+    remote = overview.get("remote_info") or {}
+    clock = overview.get("sys_time") or {}
+
+    def flag(value: Any) -> bool | None:
+        return None if value is None else str(value) == "1"
+
+    return DataloggerInfo(
+        serial=labels.get("DEVICE_SN") or module.get("module_sn"),
+        firmware_version=labels.get("APPLI_SOFT_VERSION"),
+        build_version=labels.get("BUILD_SOFT_VERSION"),
+        hardware_version=labels.get("VERSION") or module.get("module_ver"),
+        cloud_server=remote.get("ip"),
+        timezone=clock.get("timezone"),
+        wifi_connected=flag(net.get("wifi_conn_sts")),
+        ethernet_connected=flag(net.get("eth_conn_sts")),
+    )
+
+
+_UNITS = {"V": "V", "Hz": "Hz", "s": "s"}
+
+
+def parse_grid_parameters(items: list[dict[str, Any]]) -> list[GridParameter]:
+    """Build :class:`GridParameter` items from ``/device/getParam?type=2``."""
+    params = []
+    for item in items:
+        raw = item.get("param_value")
+        try:
+            value: float | str | None = float(raw)
+        except (TypeError, ValueError):
+            value = raw if raw not in (None, "", "--") else None
+        params.append(
+            GridParameter(
+                key=str(item.get("param_name", ""))
+                .removeprefix("I18N_COMMON_")
+                .lower(),
+                value=value,
+                unit=_UNITS.get(str(item.get("unit"))),
+                register=item.get("param_addr"),
+            )
+        )
+    return params

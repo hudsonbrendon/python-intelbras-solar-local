@@ -14,10 +14,16 @@ from .exceptions import (
 )
 from .modbus import ModbusTcpClient
 from .models import (
+    DataloggerInfo,
     DataloggerStatus,
+    GridParameter,
     InverterStatus,
     Mppt,
+    WifiSignal,
     parse_datalogger,
+    parse_datalogger_info,
+    parse_firmware,
+    parse_grid_parameters,
     parse_registers,
 )
 from .winet import WiNetClient
@@ -26,9 +32,15 @@ __all__ = [
     "IntelbrasSolarClient",
     "InverterStatus",
     "DataloggerStatus",
+    "DataloggerInfo",
+    "WifiSignal",
+    "GridParameter",
     "Mppt",
     "parse_registers",
     "parse_datalogger",
+    "parse_datalogger_info",
+    "parse_firmware",
+    "parse_grid_parameters",
     "ModbusTcpClient",
     "WiNetClient",
     "IntelbrasSolarError",
@@ -40,4 +52,4 @@ __all__ = [
     "DEVICE_MODELS",
     "WORK_STATES",
 ]
-__version__ = "0.1.1"
+__version__ = "0.2.0"

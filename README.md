@@ -25,6 +25,9 @@ The datalogger exposes two interfaces without a login, and this library uses bot
 - ☀️ Voltage, current and power for each MPPT input.
 - 🔌 Grid voltage, current and frequency (0.01 Hz).
 - 🩺 Health data: work state, internal temperature, bus voltage, insulation resistance and fault code.
+- 🧩 Firmware: the inverter's ARM and DSP versions, and the datalogger's application, build and hardware versions.
+- 📶 Datalogger Wi-Fi: the joined SSID and its RSSI.
+- 🛡️ Grid protection: the over/under-voltage and frequency thresholds per level, and their trip times.
 - 📡 Datalogger data: Wi-Fi and cloud connectivity, active fault list and alarm count.
 - 🛠️ Controls: start or stop the inverter, switch power limitation on or off, set the power limit (%), set the clock.
 - No `pymodbus` dependency. The library ships a tiny asyncio Modbus TCP client, so it never clashes with the version
@@ -72,6 +75,9 @@ If yours differs, open an issue with the output of `examples/status.py`.
 | `async_get_status()` | Returns an `InverterStatus` from Modbus, with a `DataloggerStatus` when the WebSocket answers (best-effort) |
 | `async_get_inverter_data()` | Modbus-only `InverterStatus` |
 | `winet.async_get_status()` | Datalogger-only `DataloggerStatus` |
+| `async_get_datalogger_info()` | `DataloggerInfo`: serial, firmware/build/hardware versions, cloud server, timezone, Wi-Fi/Ethernet link |
+| `async_get_wifi_signal()` | `WifiSignal`: joined SSID and RSSI (dBm). It runs a ~3 s station scan, so don't call it every poll |
+| `async_get_grid_parameters()` | `GridParameter` list: grid-protection thresholds and trip times |
 | `async_set_inverter_on(on)` | Starts or stops generation (holding register 5005) |
 | `async_set_power_limit_enabled(enabled)` | Switches power limitation on or off (5006) |
 | `async_set_power_limit(percent)` | Sets the power limit, 0–100 % (5007) |

@@ -15,6 +15,8 @@ async def test_status_merges_modbus_and_winet(inverter, winet_server):
         status = await client.async_get_status()
     assert status.serial == "XS123456780"
     assert status.datalogger is not None and status.datalogger.total_alarms == 1
+    assert status.arm_firmware == "ARM_SUNSTONE-S_V11_V01_A"
+    assert status.dsp_firmware == "MDSP_SUNSTONE-S_V11_V01_A"
 
 
 async def test_status_survives_winet_down(inverter, unused_tcp_port):
@@ -41,4 +43,23 @@ async def test_controls_write_expected_registers(inverter):
 
 
 def test_version():
-    assert __version__ == "0.1.1"
+    assert __version__ == "0.2.0"
+
+
+async def test_firmware_read_once_and_retried_after_failure(inverter):
+    from intelbras_solar_local.const import FIRMWARE_BLOCK
+
+    async with IntelbrasSolarClient("127.0.0.1", inverter.port) as client:
+        reads = []
+        real = client.modbus.async_read
+
+        async def spy(fc, start, count):
+            reads.append(start)
+            return await real(fc, start, count)
+
+        client.modbus.async_read = spy
+        inverter.garbage = []
+        first = await client.async_get_inverter_data()
+        second = await client.async_get_inverter_data()
+    assert first.dsp_firmware == second.dsp_firmware == "MDSP_SUNSTONE-S_V11_V01_A"
+    assert reads.count(FIRMWARE_BLOCK[0]) == 1

@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented here.
 
+## [0.2.0] - 2026-10-25
+
+### Added
+- `InverterStatus.arm_firmware` / `dsp_firmware`: inverter firmware versions
+  from input registers 5799–5828 (ASCII). They are read once and cached.
+- `async_get_datalogger_info()` returns a `DataloggerInfo`: datalogger serial,
+  application, build and hardware versions, cloud server, timezone, and Wi-Fi
+  and Ethernet link. It reads the web UI endpoints `/about/list` and
+  `/device/overview` with the WebSocket session token.
+- `async_get_wifi_signal()` returns a `WifiSignal` with the joined SSID and its
+  RSSI in dBm. It runs the web UI's station scan (`/wifi/updateStaScan`, about
+  3 s) and polls `stalist`.
+- `async_get_grid_parameters()` returns a list of `GridParameter`: the
+  inverter's grid-protection thresholds and trip times from
+  `/device/getParam?type=2`, with their register addresses.
+- Parsers `parse_firmware`, `parse_datalogger_info` and `parse_grid_parameters`.
+
 ## [0.1.1] - 2026-10-24
 
 ### Fixed

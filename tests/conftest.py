@@ -18,6 +18,16 @@ INPUT = {
     5034: 1000, 5035: 600, 5070: 1663, 5112: 578, 5127: 6378, 5143: 22384,
     5144: 2, 5146: 3770, 5147: 6006, 5225: 3533, 5226: 1,
 }
+# "ARM_SUNSTONE-S_V11_V01_A" at 5799 and "MDSP_SUNSTONE-S_V11_V01_A" at 5814.
+def _ascii_regs(start: int, text: str, count: int = 15) -> dict[int, int]:
+    raw = text.encode().ljust(count * 2, b"\0")
+    return {start + i: int.from_bytes(raw[2 * i : 2 * i + 2]) for i in range(count)}
+
+
+FIRMWARE = _ascii_regs(5799, "ARM_SUNSTONE-S_V11_V01_A") | _ascii_regs(
+    5814, "MDSP_SUNSTONE-S_V11_V01_A"
+)
+
 HOLDING = {
     4999: 2026, 5000: 10, 5001: 24, 5002: 14, 5003: 51, 5004: 39,
     5005: 0xCF, 5006: 0xAA, 5007: 1000,
@@ -31,9 +41,50 @@ WINET_REPLIES = {
     },
     "fault": {"list": [], "count": 0},
     "devicelist": {
-        "list": [{"dev_id": 1, "dev_sn": "XS123456780", "dev_model": "IONS-5K M5"}],
+        "list": [
+            {
+                "dev_id": 1,
+                "dev_type": 21,
+                "dev_code": 9748,
+                "dev_sn": "XS123456780",
+                "dev_model": "IONS-5K M5",
+            }
+        ],
         "count": 1,
     },
+}
+
+ABOUT = {
+    "list": [
+        {"data_name": f"I18N_COMMON_{name}", "data_value": value}
+        for name, value in (
+            ("DEVICE_SN", "B12345"),
+            ("APPLI_SOFT_VERSION", "WIFI-SV300.001.03.P002"),
+            ("BUILD_SOFT_VERSION", "WIFI-SV300.001.03.B000"),
+            ("VERSION", "M_WI-FI_V01_V01_A"),
+        )
+    ]
+}
+OVERVIEW = {
+    "module_info": {"module_sn": "B12345", "module_ver": "M_WI-FI_V01_V01_A"},
+    "net_info": {"wifi_conn_sts": 1, "eth_conn_sts": 0},
+    "remote_info": {"ip": "app.isolarcloud.com"},
+    "sys_time": {"timezone": "UTC-03:00"},
+}
+PARAMS = {
+    "list": [
+        {
+            "param_addr": addr,
+            "param_name": f"I18N_COMMON_{name}",
+            "param_value": value,
+            "unit": unit,
+        }
+        for addr, name, value, unit in (
+            (32313, "PROTECTION_SERIES", "2", "I18N_COMMON_PROTECT_PARAMS_GRADE"),
+            (32323, "OVERVOLTAGE_SINGLE_PROTECT_VALUE", "268.8", "V"),
+            (32364, "OVERVOLTAGE_LEVEL1_PROTECT_TIME", "--", "s"),
+        )
+    ]
 }
 
 
@@ -41,7 +92,7 @@ class FakeInverter:
     """In-process Modbus TCP server backed by register dicts."""
 
     def __init__(self) -> None:
-        self.input = dict(INPUT)
+        self.input = dict(INPUT) | FIRMWARE
         self.holding = dict(HOLDING)
         self.writes: list[tuple[int, int, int]] = []
         # Next replies to corrupt: "short_mbap" or "wrong_count".
@@ -104,6 +155,8 @@ async def winet_server():
     """Fake WiNet-S WebSocket; pushes a ``notice`` before every reply."""
     replies = dict(WINET_REPLIES)
     received: list[dict] = []
+    http_calls: list[tuple[str, dict]] = []
+    scan = {"requested": False, "polls": 0}
 
     async def handler(request):
         ws = web.WebSocketResponse()
@@ -114,6 +167,19 @@ async def winet_server():
             notice = {"result_code": 1, "result_data": {"service": "notice"}}
             await ws.send_str(json.dumps(notice))
             service = req["service"]
+            if service == "stalist":
+                scan["polls"] += 1
+                ready = scan["requested"] and scan["polls"] >= 2
+                data = (
+                    {"curr_ssid": "CASA", "curr_signal": -36, "list": []}
+                    if ready
+                    else {}
+                )
+                await ws.send_str(json.dumps({
+                    "result_code": 1 if ready else 208,
+                    "result_data": {"service": "stalist", **data},
+                }))
+                continue
             if service not in replies:
                 await ws.send_str(json.dumps({
                     "result_code": 211, "result_msg": "I18N_COMMON_INTER_ABNORMAL",
@@ -126,11 +192,30 @@ async def winet_server():
             }))
         return ws
 
+    def http(path, body):
+        async def _handler(request):
+            params = dict(request.query) | dict(await request.post())
+            http_calls.append((path, params))
+            if params.get("token") != "tok-1":
+                return web.Response(text=json.dumps({"result_code": 106}))
+            if path == "/wifi/updateStaScan":
+                scan["requested"] = True
+            # The real server answers JSON with a text/html content type.
+            payload = {"result_code": 1, "result_msg": "success", "result_data": body}
+            return web.Response(text=json.dumps(payload), content_type="text/html")
+
+        return _handler
+
     app = web.Application()
     app.router.add_get("/ws/home/overview", handler)
+    app.router.add_get("/about/list", http("/about/list", ABOUT))
+    app.router.add_get("/device/overview", http("/device/overview", OVERVIEW))
+    app.router.add_get("/device/getParam", http("/device/getParam", PARAMS))
+    app.router.add_post("/wifi/updateStaScan", http("/wifi/updateStaScan", {}))
     server = TestServer(app, host="127.0.0.1")
     await server.start_server()
     server.replies = replies
     server.received = received
+    server.http_calls = http_calls
     yield server
     await server.close()
