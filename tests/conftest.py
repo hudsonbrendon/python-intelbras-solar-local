@@ -71,6 +71,32 @@ OVERVIEW = {
     "remote_info": {"ip": "app.isolarcloud.com"},
     "sys_time": {"timezone": "UTC-03:00"},
 }
+DEVICE_INFO = {
+    "list": [
+        {"data_name": f"I18N_COMMON_{name}", "data_value": value, "data_unit": ""}
+        for name, value in (
+            ("DEVICE_SN", "XS123456780"),
+            ("DEVICE_MODEL", "IONS-5K M5"),
+            ("RATED_POWER_RATED", "5.0"),
+            ("ARM_SOFT_VERSION", "SUNSTONE-S_01011.01.39"),
+            ("MDSP_SOFT_VERSION", "SUNSTONE-S_03011.01.24"),
+            ("PVD_SOFT_VERSION", "--"),
+        )
+    ]
+}
+FAULT_HISTORY = {
+    "list": [
+        {"warning_time": t, "warning_level": 1, "warning_code": code,
+         "warning_reason": "10", "warning_appear": appear}
+        for t, code, appear in (
+            ("2026-08-07 15:41:57", 6, 1),
+            ("2026-09-18 11:46:45", 5, 0),
+            ("2026-09-18 11:46:35", 5, 1),
+            ("bad", 99, 1),
+        )
+    ],
+    "count": 4,
+}
 PARAMS = {
     "list": [
         {
@@ -212,6 +238,8 @@ async def winet_server():
     app.router.add_get("/device/overview", http("/device/overview", OVERVIEW))
     app.router.add_get("/device/getParam", http("/device/getParam", PARAMS))
     app.router.add_post("/wifi/updateStaScan", http("/wifi/updateStaScan", {}))
+    app.router.add_get("/device/getInfo", http("/device/getInfo", DEVICE_INFO))
+    app.router.add_post("/historyfault/list", http("/historyfault/list", FAULT_HISTORY))
     server = TestServer(app, host="127.0.0.1")
     await server.start_server()
     server.replies = replies

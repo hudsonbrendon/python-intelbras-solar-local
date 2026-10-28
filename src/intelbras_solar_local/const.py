@@ -34,7 +34,38 @@ WINET_HTTP_ABOUT = "/about/list"
 WINET_HTTP_OVERVIEW = "/device/overview"
 WINET_HTTP_PARAMS = "/device/getParam"
 WINET_HTTP_WIFI_SCAN = "/wifi/updateStaScan"
+WINET_HTTP_DEVICE_INFO = "/device/getInfo"
+WINET_HTTP_FAULT_HISTORY = "/historyfault/list"
 WIFI_SCAN_TIMEOUT = 20
+
+# Grid-fault codes of the datalogger's fault history (/historyfault/list), from
+# the web UI's default fault table. Codes the table only labels generically
+# ("fault_codeNN_name") are left out and reported as ``fault_<code>``.
+FAULT_NAMES = {
+    1: "grid_over_voltage",
+    2: "grid_under_voltage",
+    3: "grid_over_frequency",
+    4: "grid_under_frequency",
+    5: "grid_interruption",
+    6: "leakage_current",
+    7: "grid_abnormal",
+    8: "grid_voltage_unbalance",
+    12: "ambient_over_temperature",
+    14: "insulation_resistance",
+    15: "ground_fault",
+    16: "afci_error",
+    18: "meter_reverse_connection",
+    19: "meter_communication",
+    22: "bms_communication",
+    23: "battery_reverse_polarity",
+    28: "boost_capacitor_overvoltage_alarm",
+    29: "boost_capacitor_overvoltage_fault",
+    30: "string_current_backfeed",
+    32: "abnormal_shutdown",
+    35: "pv_grounding_fault",
+    62: "hardware_fault",
+    1001: "external_power_supply",
+}
 
 # Writable holding registers
 REG_CLOCK = 4999  # year, month, day, hour, minute, second (6 registers)

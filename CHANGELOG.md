@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented here.
 
+## [0.3.0] - 2026-10-28
+
+### Added
+- `async_get_inverter_info()` returns an `InverterInfo` from `/device/getInfo`:
+  serial, model, rated active and reactive power, and the ARM, MDSP, SDSP and
+  CPLD firmware versions (for example `SUNSTONE-S_01011.01.39`). The ASCII
+  registers behind `InverterStatus.arm_firmware` / `dsp_firmware` hold the
+  firmware family (`ARM_SUNSTONE-S_V11_V01_A`), not the version.
+- `async_get_fault_history()` returns the datalogger's recorded faults and
+  warnings as `FaultEvent` items, newest first. It reads `/historyfault/list`,
+  and the history goes back to December 2024 on the test unit. `FAULT_NAMES`
+  maps fault codes to names, taken from the web UI's fault table.
+- Parsers `parse_inverter_info` and `parse_fault_history`.
+
 ## [0.2.0] - 2026-10-25
 
 ### Added

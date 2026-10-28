@@ -59,3 +59,31 @@ async def test_grid_parameters_without_devices(winet_server):
     winet_server.replies["devicelist"] = {"list": [], "count": 0}
     async with aiohttp.ClientSession() as session:
         assert await _client(session, winet_server).async_get_grid_parameters() == []
+
+
+async def test_inverter_info(winet_server):
+    async with aiohttp.ClientSession() as session:
+        info = await _client(session, winet_server).async_get_inverter_info()
+    assert info.serial == "XS123456780"
+    assert info.rated_power == 5.0
+    assert info.arm_version == "SUNSTONE-S_01011.01.39"
+    assert info.mdsp_version == "SUNSTONE-S_03011.01.24"
+    assert info.sdsp_version is None and info.rated_reactive_power is None
+    assert winet_server.http_calls[0][1]["dev_id"] == "1"
+
+
+async def test_fault_history_newest_first(winet_server):
+    from datetime import datetime
+
+    async with aiohttp.ClientSession() as session:
+        events = await _client(session, winet_server).async_get_fault_history()
+    assert [(e.time, e.name, e.active) for e in events] == [
+        (datetime(2026, 9, 18, 11, 46, 45), "grid_interruption", False),
+        (datetime(2026, 9, 18, 11, 46, 35), "grid_interruption", True),
+        (datetime(2026, 8, 7, 15, 41, 57), "leakage_current", True),
+        (None, "fault_99", True),
+    ]
+    assert events[0].level == "fault" and events[0].reason == "10"
+    form = winet_server.http_calls[0][1]
+    assert form["end_time"].startswith("2037")  # firmware limit: 32-bit time_t
+    assert (form["page"], form["limit"], form["dev_type"]) == ("-1", "-1", "21")

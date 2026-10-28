@@ -25,6 +25,8 @@ The server also pushes unsolicited `notice` messages, so match each reply on its
 | `statistics` / `runtime` | Daily and total energy, current power, adjustable P/Q limits |
 | `state` | `total_fault`, `total_alarm`, `wifi_conn_sts`, `cloud_conn_sts` |
 | `fault` | Active fault list |
+| `real` (`dev_id`) | Realtime values the web UI shows per device; Modbus covers them all |
+| `statistics`, `runtime` | Plant totals, rated reactive power (3 kvar) and the reactive limits, online/offline device counts |
 | `stalist` | After a scan: `curr_ssid`, `curr_signal` (dBm) and the visible APs. Before a scan it returns `result_code` 208 |
 | `real_battery`, `deviceInfo` | `result_code` 211/215 on this model (not supported) |
 
@@ -39,6 +41,10 @@ JSON with a `text/html` content type.
 | `GET /device/overview` | Module serial and hardware version, Wi-Fi/Ethernet link, cloud server (`app.isolarcloud.com`), clock, timezone, inverter country |
 | `POST /wifi/updateStaScan` (`sta_scan=1`) | Starts a station scan (the web UI refresh button); read the result with the `stalist` WebSocket service |
 | `GET /device/getParam?type=2&dev_id&dev_type&dev_code` | 29 grid-protection parameters with value, unit, range and register address (32313–32384) |
+| `GET /device/getInfo?dev_id&page&limit` | Inverter serial, model, rated power, ARM/MDSP/SDSP/CPLD/PVD/AFD firmware versions |
+| `POST /historyfault/list` (`dev_id`, `dev_type`, `dev_code`, `fault`, `warning`, `start_time`, `end_time`, `page`, `limit`) | Fault history: `warning_time`, `warning_level` (1 fault, 0/2 warning, 3 prompt), `warning_code`, `warning_reason`, `warning_appear` (1 raised, 0 cleared). `page=limit=-1` returns every row. An `end_time` past 2038-01-19 fails with `I18N_COMMON_INTER_ABNORMAL` (32-bit `time_t`) |
+| `GET /device/getParam?type=1` | System parameters: standby time, fault recovery time, PID night repair, over-frequency derating curve, rated power, PV access mode |
+| `POST /inverter/list` | Inverter list with COM port, Modbus address and link status |
 | `GET /device/getParam?type=0` | Country / grid-code catalogue |
 | `GET /wifi/listAP`, `/time/get`, `/serial/list`, `/transmit/list`, `/4g/list` | Hotspot SSID, NTP settings, COM port, IEC 104 / third-party cloud forwarding, APN |
 

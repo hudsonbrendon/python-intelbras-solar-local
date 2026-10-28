@@ -14,6 +14,10 @@
 
 ::: intelbras_solar_local.GridParameter
 
+::: intelbras_solar_local.InverterInfo
+
+::: intelbras_solar_local.FaultEvent
+
 ::: intelbras_solar_local.parse_registers
 
 ::: intelbras_solar_local.parse_datalogger

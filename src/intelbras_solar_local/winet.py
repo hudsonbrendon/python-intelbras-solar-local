@@ -18,6 +18,8 @@ from .const import (
     DEFAULT_WINET_PORT,
     WIFI_SCAN_TIMEOUT,
     WINET_HTTP_ABOUT,
+    WINET_HTTP_DEVICE_INFO,
+    WINET_HTTP_FAULT_HISTORY,
     WINET_HTTP_OVERVIEW,
     WINET_HTTP_PARAMS,
     WINET_HTTP_WIFI_SCAN,
@@ -28,11 +30,15 @@ from .exceptions import IntelbrasSolarConnectionError, IntelbrasSolarProtocolErr
 from .models import (
     DataloggerInfo,
     DataloggerStatus,
+    FaultEvent,
     GridParameter,
+    InverterInfo,
     WifiSignal,
     parse_datalogger,
     parse_datalogger_info,
+    parse_fault_history,
     parse_grid_parameters,
+    parse_inverter_info,
 )
 
 # WiNet result_code for "nothing to report yet" (e.g. stalist before a scan).
@@ -167,16 +173,48 @@ class WiNetClient:
     async def async_get_grid_parameters(self) -> list[GridParameter]:
         """Grid-protection thresholds and trip times of the first inverter."""
         async with self._open() as s:
-            devices = await s.call("devicelist", type="0", is_check_token="0")
-            dev = (devices.get("list") or [None])[0]
+            dev = await _first_device(s)
             if dev is None:
                 return []
-            data = await s.http(
-                "GET",
-                WINET_HTTP_PARAMS,
-                type="2",
-                dev_id=str(dev["dev_id"]),
-                dev_type=str(dev["dev_type"]),
-                dev_code=str(dev["dev_code"]),
-            )
+            data = await s.http("GET", WINET_HTTP_PARAMS, type="2", **dev)
         return parse_grid_parameters(data.get("list") or [])
+
+    async def async_get_inverter_info(self) -> InverterInfo:
+        """Serial, model, ratings and ARM/MDSP/SDSP/CPLD firmware versions."""
+        async with self._open() as s:
+            dev = await _first_device(s)
+            if dev is None:
+                return InverterInfo()
+            data = await s.http(
+                "GET", WINET_HTTP_DEVICE_INFO, dev_id=dev["dev_id"], page=1, limit=100
+            )
+        return parse_inverter_info(data)
+
+    async def async_get_fault_history(self) -> list[FaultEvent]:
+        """Every fault and warning the datalogger recorded, newest first."""
+        async with self._open() as s:
+            dev = await _first_device(s)
+            if dev is None:
+                return []
+            form = {
+                **dev,
+                "fault": "1",
+                "warning": "1",
+                "start_time": "2000-01-01 00:00:00",
+                # The firmware rejects dates past 2038 (32-bit time_t).
+                "end_time": "2037-12-31 23:59:59",
+                # -1/-1 is what the web UI's export uses to get every row.
+                "page": "-1",
+                "limit": "-1",
+            }
+            data = await s.http("POST", WINET_HTTP_FAULT_HISTORY, **form)
+        return parse_fault_history(data.get("list") or [])
+
+
+async def _first_device(s: _Session) -> dict[str, str] | None:
+    """``dev_id``/``dev_type``/``dev_code`` of the first device, as strings."""
+    devices = await s.call("devicelist", type="0", is_check_token="0")
+    dev = (devices.get("list") or [None])[0]
+    if dev is None:
+        return None
+    return {k: str(dev[k]) for k in ("dev_id", "dev_type", "dev_code")}

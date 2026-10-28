@@ -29,7 +29,9 @@ from .exceptions import IntelbrasSolarError
 from .modbus import ModbusTcpClient
 from .models import (
     DataloggerInfo,
+    FaultEvent,
     GridParameter,
+    InverterInfo,
     InverterStatus,
     WifiSignal,
     parse_firmware,
@@ -148,6 +150,14 @@ class IntelbrasSolarClient:
     async def async_get_grid_parameters(self) -> list[GridParameter]:
         """Grid-protection thresholds and trip times."""
         return await self.winet.async_get_grid_parameters()
+
+    async def async_get_inverter_info(self) -> InverterInfo:
+        """Inverter serial, model, ratings and firmware versions."""
+        return await self.winet.async_get_inverter_info()
+
+    async def async_get_fault_history(self) -> list[FaultEvent]:
+        """Recorded faults and warnings, newest first."""
+        return await self.winet.async_get_fault_history()
 
     async def async_set_inverter_on(self, on: bool) -> None:
         """Start (``True``) or stop (``False``) power generation."""

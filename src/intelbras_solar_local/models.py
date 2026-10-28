@@ -9,6 +9,7 @@ from typing import Any
 from .const import (
     DEVICE_MODELS,
     ENABLE,
+    FAULT_NAMES,
     FAULT_STATE,
     PRODUCING_STATES,
     REG_POWER_LIMIT,
@@ -74,6 +75,37 @@ class GridParameter:
     value: float | str | None
     unit: str | None
     register: int | None
+
+
+@dataclass
+class InverterInfo:
+    """Inverter identity and firmware versions as the web UI reports them."""
+
+    serial: str | None = None
+    model: str | None = None
+    rated_power: float | None = None  # kW
+    rated_reactive_power: float | None = None  # kvar
+    arm_version: str | None = None
+    mdsp_version: str | None = None
+    sdsp_version: str | None = None
+    cpld_version: str | None = None
+
+
+@dataclass
+class FaultEvent:
+    """One entry of the datalogger's fault history.
+
+    ``time`` is the inverter's local wall-clock time (naive). ``active`` is
+    ``True`` for the event that raised the fault and ``False`` for the one that
+    cleared it.
+    """
+
+    time: datetime | None
+    code: int
+    name: str
+    level: str  # "fault", "warning" or "prompt"
+    active: bool
+    reason: str | None
 
 
 @dataclass
@@ -290,3 +322,53 @@ def parse_grid_parameters(items: list[dict[str, Any]]) -> list[GridParameter]:
             )
         )
     return params
+
+
+def _number(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def parse_inverter_info(data: dict[str, Any]) -> InverterInfo:
+    """Build an :class:`InverterInfo` from ``/device/getInfo``."""
+    raw = _labelled(data.get("list") or [])
+    labels = {k: v for k, v in raw.items() if v not in ("", "--")}
+    return InverterInfo(
+        serial=labels.get("DEVICE_SN"),
+        model=labels.get("DEVICE_MODEL"),
+        rated_power=_number(labels.get("RATED_POWER_RATED")),
+        rated_reactive_power=_number(labels.get("RATED_REACTIVE_POWER")),
+        arm_version=labels.get("ARM_SOFT_VERSION"),
+        mdsp_version=labels.get("MDSP_SOFT_VERSION"),
+        sdsp_version=labels.get("SDSP_SOFT_VERSION"),
+        cpld_version=labels.get("CPLD_SOFT_VERSION"),
+    )
+
+
+_LEVELS = {0: "warning", 1: "fault", 2: "warning", 3: "prompt"}
+
+
+def parse_fault_history(items: list[dict[str, Any]]) -> list[FaultEvent]:
+    """Build :class:`FaultEvent` items from ``/historyfault/list``, newest first."""
+    events = []
+    for item in items:
+        code = int(item.get("warning_code", 0))
+        reason = item.get("warning_reason")
+        try:
+            when = datetime.strptime(str(item.get("warning_time")), "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            when = None
+        events.append(
+            FaultEvent(
+                time=when,
+                code=code,
+                name=FAULT_NAMES.get(code, f"fault_{code}"),
+                level=_LEVELS.get(int(item.get("warning_level", 1)), "fault"),
+                active=str(item.get("warning_appear")) == "1",
+                reason=None if reason is None else str(reason),
+            )
+        )
+    events.sort(key=lambda e: e.time or datetime.min, reverse=True)
+    return events
