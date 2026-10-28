@@ -41,6 +41,10 @@ from .models import (
     parse_inverter_info,
 )
 
+# Fault history paging; 20 pages of 100 cover far more than the datalogger keeps.
+FAULT_PAGE_SIZE = 100
+FAULT_MAX_PAGES = 20
+
 # Seconds to wait before retrying a ``connect`` the datalogger dropped.
 CONNECT_RETRY_DELAY = 1.0
 
@@ -231,12 +235,20 @@ class WiNetClient:
                 "start_time": "2000-01-01 00:00:00",
                 # The firmware rejects dates past 2038 (32-bit time_t).
                 "end_time": "2037-12-31 23:59:59",
-                # -1/-1 is what the web UI's export uses to get every row.
-                "page": "-1",
-                "limit": "-1",
+                "limit": str(FAULT_PAGE_SIZE),
             }
-            data = await s.http("POST", WINET_HTTP_FAULT_HISTORY, **form)
-        return parse_fault_history(data.get("list") or [])
+            # Page through it: the web UI export's page=limit=-1 sometimes
+            # returns an empty list.
+            rows: list[dict[str, Any]] = []
+            for page in range(1, FAULT_MAX_PAGES + 1):
+                data = await s.http(
+                    "POST", WINET_HTTP_FAULT_HISTORY, page=str(page), **form
+                )
+                batch = data.get("list") or []
+                rows += batch
+                if len(batch) < FAULT_PAGE_SIZE or len(rows) >= data.get("count", 0):
+                    break
+        return parse_fault_history(rows)
 
 
 async def _first_device(s: _Session) -> dict[str, str] | None:

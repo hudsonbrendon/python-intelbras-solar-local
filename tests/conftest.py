@@ -232,8 +232,13 @@ async def winet_server():
                 return web.Response(text=json.dumps({"result_code": 106}))
             if path == "/wifi/updateStaScan":
                 scan["requested"] = True
+            data = body
+            if path == "/historyfault/list":
+                size, page = int(params["limit"]), int(params["page"])
+                rows = body["list"][(page - 1) * size : page * size]
+                data = {**body, "list": rows}
             # The real server answers JSON with a text/html content type.
-            payload = {"result_code": 1, "result_msg": "success", "result_data": body}
+            payload = {"result_code": 1, "result_msg": "success", "result_data": data}
             return web.Response(text=json.dumps(payload), content_type="text/html")
 
         return _handler

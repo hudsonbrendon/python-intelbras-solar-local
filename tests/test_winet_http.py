@@ -86,7 +86,18 @@ async def test_fault_history_newest_first(winet_server):
     assert events[0].level == "fault" and events[0].reason == "10"
     form = winet_server.http_calls[0][1]
     assert form["end_time"].startswith("2037")  # firmware limit: 32-bit time_t
-    assert (form["page"], form["limit"], form["dev_type"]) == ("-1", "-1", "21")
+    assert (form["page"], form["limit"], form["dev_type"]) == ("1", "100", "21")
+
+
+async def test_fault_history_pages_until_count(winet_server, monkeypatch):
+    from intelbras_solar_local import winet as winet_mod
+
+    monkeypatch.setattr(winet_mod, "FAULT_PAGE_SIZE", 2)
+    async with aiohttp.ClientSession() as session:
+        events = await _client(session, winet_server).async_get_fault_history()
+    pages = [c[1]["page"] for c in winet_server.http_calls]
+    assert pages == ["1", "2"]
+    assert len(events) == 4
 
 
 

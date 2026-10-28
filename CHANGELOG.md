@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here.
 
+## [0.3.2] - 2026-10-28
+
+### Fixed
+- `async_get_fault_history()` pages through the history 100 rows at a time.
+  The web UI export's `page=limit=-1` sometimes returned an empty list.
+
 ## [0.3.1] - 2026-10-28
 
 ### Fixed

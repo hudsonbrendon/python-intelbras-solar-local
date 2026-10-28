@@ -42,7 +42,7 @@ JSON with a `text/html` content type.
 | `POST /wifi/updateStaScan` (`sta_scan=1`) | Starts a station scan (the web UI refresh button); read the result with the `stalist` WebSocket service |
 | `GET /device/getParam?type=2&dev_id&dev_type&dev_code` | 29 grid-protection parameters with value, unit, range and register address (32313–32384) |
 | `GET /device/getInfo?dev_id&page&limit` | Inverter serial, model, rated power, ARM/MDSP/SDSP/CPLD/PVD/AFD firmware versions |
-| `POST /historyfault/list` (`dev_id`, `dev_type`, `dev_code`, `fault`, `warning`, `start_time`, `end_time`, `page`, `limit`) | Fault history: `warning_time`, `warning_level` (1 fault, 0/2 warning, 3 prompt), `warning_code`, `warning_reason`, `warning_appear` (1 raised, 0 cleared). `page=limit=-1` returns every row. An `end_time` past 2038-01-19 fails with `I18N_COMMON_INTER_ABNORMAL` (32-bit `time_t`) |
+| `POST /historyfault/list` (`dev_id`, `dev_type`, `dev_code`, `fault`, `warning`, `start_time`, `end_time`, `page`, `limit`) | Fault history: `warning_time`, `warning_level` (1 fault, 0/2 warning, 3 prompt), `warning_code`, `warning_reason`, `warning_appear` (1 raised, 0 cleared). `page=limit=-1` (the web UI export) sometimes returns an empty list; page with `page`/`limit` instead. An `end_time` past 2038-01-19 fails with `I18N_COMMON_INTER_ABNORMAL` (32-bit `time_t`) |
 | `GET /device/getParam?type=1` | System parameters: standby time, fault recovery time, PID night repair, over-frequency derating curve, rated power, PV access mode |
 | `POST /inverter/list` | Inverter list with COM port, Modbus address and link status |
 | `GET /device/getParam?type=0` | Country / grid-code catalogue |
