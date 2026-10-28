@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented here.
 
+## [0.3.1] - 2026-10-28
+
+### Fixed
+- WebSocket sessions retry the connection once, after 1 s, when the datalogger
+  resets the socket or drops `connect`. The WiNet-S does this when a new
+  session follows the previous one too quickly, so back-to-back calls such as
+  `async_get_inverter_info()` then `async_get_fault_history()` failed
+  intermittently.
+
 ## [0.3.0] - 2026-10-28
 
 ### Added

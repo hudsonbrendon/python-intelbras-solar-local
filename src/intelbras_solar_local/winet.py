@@ -41,6 +41,9 @@ from .models import (
     parse_inverter_info,
 )
 
+# Seconds to wait before retrying a ``connect`` the datalogger dropped.
+CONNECT_RETRY_DELAY = 1.0
+
 # WiNet result_code for "nothing to report yet" (e.g. stalist before a scan).
 _NOT_READY = 208
 
@@ -131,12 +134,37 @@ class WiNetClient:
     async def _open(self, timeout: float | None = None) -> AsyncIterator[_Session]:
         try:
             async with asyncio.timeout(timeout or self._timeout):
-                async with self._session.ws_connect(self.url) as ws:
+                ws, token = await self._async_connect()
+                try:
                     session = _Session(ws, self._session, self.base_url)
-                    session.token = (await session.call("connect"))["token"]
+                    session.token = token
                     yield session
+                finally:
+                    await ws.close()
         except (aiohttp.ClientError, TimeoutError) as err:
             raise IntelbrasSolarConnectionError(f"WiNet {self.url}: {err!r}") from err
+
+    async def _async_connect(self) -> tuple[aiohttp.ClientWebSocketResponse, str]:
+        """Open the WebSocket and get a session token, retrying once.
+
+        The WiNet-S frees a session slot a moment after the previous socket
+        closes; until then it resets the connection or drops the ``connect``.
+        """
+        retries = 1
+        while True:
+            ws = None
+            try:
+                ws = await self._session.ws_connect(self.url)
+                reply = await _Session(ws, self._session, self.base_url).call("connect")
+            except (IntelbrasSolarConnectionError, aiohttp.ClientError):
+                if ws is not None:
+                    await ws.close()
+                if not retries:
+                    raise
+                retries -= 1
+                await asyncio.sleep(CONNECT_RETRY_DELAY)
+                continue
+            return ws, reply["token"]
 
     async def async_get_status(self) -> DataloggerStatus:
         """Read ``state``, ``fault`` and ``devicelist`` over WebSocket."""

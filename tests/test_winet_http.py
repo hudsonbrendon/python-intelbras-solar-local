@@ -87,3 +87,21 @@ async def test_fault_history_newest_first(winet_server):
     form = winet_server.http_calls[0][1]
     assert form["end_time"].startswith("2037")  # firmware limit: 32-bit time_t
     assert (form["page"], form["limit"], form["dev_type"]) == ("-1", "-1", "21")
+
+
+
+async def test_connect_retries_once_when_dropped(winet_server):
+    winet_server.drops["connect"] = 1
+    async with aiohttp.ClientSession() as session:
+        info = await _client(session, winet_server).async_get_info()
+    assert info.serial == "B12345"
+    assert [r["service"] for r in winet_server.received].count("connect") == 2
+
+
+async def test_connect_gives_up_after_retry(winet_server):
+    from intelbras_solar_local import IntelbrasSolarConnectionError
+
+    winet_server.drops["connect"] = 2
+    async with aiohttp.ClientSession() as session:
+        with pytest.raises(IntelbrasSolarConnectionError):
+            await _client(session, winet_server).async_get_info()

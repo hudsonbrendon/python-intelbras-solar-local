@@ -183,6 +183,7 @@ async def winet_server():
     received: list[dict] = []
     http_calls: list[tuple[str, dict]] = []
     scan = {"requested": False, "polls": 0}
+    drops = {"connect": 0}
 
     async def handler(request):
         ws = web.WebSocketResponse()
@@ -193,6 +194,11 @@ async def winet_server():
             notice = {"result_code": 1, "result_data": {"service": "notice"}}
             await ws.send_str(json.dumps(notice))
             service = req["service"]
+            if service == "connect" and drops["connect"]:
+                # Mimic a datalogger that has not freed the previous slot yet.
+                drops["connect"] -= 1
+                await ws.close()
+                return ws
             if service == "stalist":
                 scan["polls"] += 1
                 ready = scan["requested"] and scan["polls"] >= 2
@@ -245,5 +251,6 @@ async def winet_server():
     server.replies = replies
     server.received = received
     server.http_calls = http_calls
+    server.drops = drops
     yield server
     await server.close()
