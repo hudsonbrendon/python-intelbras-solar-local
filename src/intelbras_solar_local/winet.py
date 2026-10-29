@@ -16,12 +16,17 @@ import aiohttp
 
 from .const import (
     DEFAULT_WINET_PORT,
+    PARAM_PROTECTION,
     WIFI_SCAN_TIMEOUT,
     WINET_HTTP_ABOUT,
+    WINET_HTTP_AP,
     WINET_HTTP_DEVICE_INFO,
     WINET_HTTP_FAULT_HISTORY,
+    WINET_HTTP_MAINTENANCE,
     WINET_HTTP_OVERVIEW,
     WINET_HTTP_PARAMS,
+    WINET_HTTP_TIME,
+    WINET_HTTP_TRANSMIT,
     WINET_HTTP_WIFI_SCAN,
     WINET_TIMEOUT,
     WINET_WS_PATH,
@@ -31,19 +36,25 @@ from .models import (
     DataloggerInfo,
     DataloggerStatus,
     FaultEvent,
-    GridParameter,
     InverterInfo,
+    Parameter,
     WifiSignal,
     parse_datalogger,
     parse_datalogger_info,
     parse_fault_history,
-    parse_grid_parameters,
     parse_inverter_info,
+    parse_parameters,
 )
 
 # Fault history paging; 20 pages of 100 cover far more than the datalogger keeps.
 FAULT_PAGE_SIZE = 100
 FAULT_MAX_PAGES = 20
+
+# Seconds between starting a Wi-Fi scan and reading its result.
+WIFI_SCAN_SETTLE = 5
+
+# Writing a parameter waits for the inverter to acknowledge it over RS485.
+PARAM_WRITE_TIMEOUT = 30
 
 # Seconds to wait before retrying a ``connect`` the datalogger dropped.
 CONNECT_RETRY_DELAY = 1.0
@@ -179,11 +190,26 @@ class WiNetClient:
         return parse_datalogger(state, faults, devices)
 
     async def async_get_info(self) -> DataloggerInfo:
-        """Datalogger serial, firmware/hardware versions and network links."""
+        """Datalogger identity, versions, network links and system settings."""
         async with self._open() as s:
             about = await s.http("GET", WINET_HTTP_ABOUT, page=1, limit=10)
             overview = await s.http("GET", WINET_HTTP_OVERVIEW)
-        return parse_datalogger_info(about, overview)
+            extra = []
+            for path in (WINET_HTTP_AP, WINET_HTTP_TIME, WINET_HTTP_TRANSMIT):
+                try:
+                    extra.append(await s.http("GET", path, page=1, limit=10))
+                except IntelbrasSolarProtocolError:
+                    extra.append({})
+        return parse_datalogger_info(about, overview, *extra)
+
+    async def async_reboot(self) -> None:
+        """Reboot the datalogger (the web UI's system maintenance button).
+
+        Readings stop for about a minute while it restarts; the inverter keeps
+        producing.
+        """
+        async with self._open() as s:
+            await s.http("POST", WINET_HTTP_MAINTENANCE, reboot="1")
 
     async def async_get_wifi_signal(self) -> WifiSignal:
         """Run a station scan and return the joined network and its RSSI.
@@ -191,25 +217,73 @@ class WiNetClient:
         This is the web UI's Wi-Fi refresh button: the scan takes about 3 s and
         does not change any setting. Do not call it on every poll.
         """
-        async with self._open(WIFI_SCAN_TIMEOUT) as s:
+        async with self._open() as s:
             await s.http("POST", WINET_HTTP_WIFI_SCAN, sta_scan="1")
+        # The scan takes the radio off-channel and drops the WebSocket about
+        # 2 s in; readings before that are stale or taken mid-scan.
+        await asyncio.sleep(WIFI_SCAN_SETTLE)
+        async with self._open(WIFI_SCAN_TIMEOUT) as s:
             while True:
-                await asyncio.sleep(2)
                 code, data = await s.call_raw("stalist")
                 if code == 1 and "curr_signal" in data:
                     return WifiSignal(data.get("curr_ssid"), data.get("curr_signal"))
                 if code not in (1, _NOT_READY):
                     msg = data.get("_msg")
                     raise IntelbrasSolarProtocolError(f"WiNet stalist: {msg}")
+                await asyncio.sleep(1)
 
-    async def async_get_grid_parameters(self) -> list[GridParameter]:
+    async def async_get_grid_parameters(self) -> list[Parameter]:
         """Grid-protection thresholds and trip times of the first inverter."""
+        return await self.async_get_parameters(PARAM_PROTECTION)
+
+    async def async_get_parameters(self, kind: int) -> list[Parameter]:
+        """Parameters of one group (:data:`PARAM_SYSTEM`/:data:`PARAM_PROTECTION`)."""
         async with self._open() as s:
             dev = await _first_device(s)
             if dev is None:
                 return []
-            data = await s.http("GET", WINET_HTTP_PARAMS, type="2", **dev)
-        return parse_grid_parameters(data.get("list") or [])
+            data = await s.http("GET", WINET_HTTP_PARAMS, type=str(kind), **dev)
+        return parse_parameters(data.get("list") or [], kind)
+
+    async def async_set_parameter(self, param: Parameter, value: float | str) -> None:
+        """Write one parameter through the web UI's WebSocket ``param`` service.
+
+        ``value`` is a number for numeric parameters or an option name (a key
+        of ``param.options``) for option parameters. It is checked against the
+        parameter's range or options before anything is sent.
+        """
+        raw = _raw_parameter_value(param, value)
+        async with self._open(PARAM_WRITE_TIMEOUT) as s:
+            dev = await _first_device(s)
+            if dev is None:
+                raise IntelbrasSolarProtocolError("WiNet param: no inverter found")
+            item = {
+                "accuracy": param.accuracy,
+                "id": None,
+                "param_addr": param.register,
+                "param_id": param.param_id,
+                "param_name": param.raw_name,
+                "param_type": param.param_type,
+                "param_value": raw,
+            }
+            reply = await s.call(
+                "param",
+                dev_code=dev["dev_code"],
+                dev_type=dev["dev_type"],
+                devid_array=[dev["dev_id"]],
+                type=str(param.kind),
+                count="1",
+                list=[item],
+                current_pack_num=1,
+                pack_num_total=1,
+                park_serial=int(time.time() * 1000),
+            )
+        results = [r for r in reply.get("list") or [] if r.get("param_pid", -1) != -1]
+        if not any(r.get("param_id") == param.param_id and r.get("result") == 0
+                   for r in results):
+            raise IntelbrasSolarProtocolError(
+                f"WiNet param: inverter rejected {param.key}={raw}"
+            )
 
     async def async_get_inverter_info(self) -> InverterInfo:
         """Serial, model, ratings and ARM/MDSP/SDSP/CPLD firmware versions."""
@@ -249,6 +323,21 @@ class WiNetClient:
                 if len(batch) < FAULT_PAGE_SIZE or len(rows) >= data.get("count", 0):
                     break
         return parse_fault_history(rows)
+
+
+def _raw_parameter_value(param: Parameter, value: float | str) -> str:
+    """Validate ``value`` for ``param`` and format it as the web UI sends it."""
+    if param.options:
+        if value not in param.options:
+            raise ValueError(f"{param.key}: {value!r} not in {sorted(param.options)}")
+        return param.options[str(value)]
+    number = float(value)
+    if param.minimum is not None and param.maximum is not None:
+        if not param.minimum <= number <= param.maximum:
+            raise ValueError(
+                f"{param.key}: {number} outside [{param.minimum}, {param.maximum}]"
+            )
+    return f"{number:.{param.accuracy}f}"
 
 
 async def _first_device(s: _Session) -> dict[str, str] | None:

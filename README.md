@@ -79,6 +79,10 @@ If yours differs, open an issue with the output of `examples/status.py`.
 | `async_get_wifi_signal()` | `WifiSignal`: joined SSID and RSSI (dBm). It runs a ~3 s station scan, so don't call it every poll |
 | `async_get_inverter_info()` | `InverterInfo`: serial, model, ratings, ARM/MDSP/SDSP/CPLD firmware versions |
 | `async_get_fault_history()` | `FaultEvent` list: recorded faults and warnings, newest first |
+| `async_get_system_parameters()` | `Parameter` list: connecting/reconnecting time, PID recovery, over-frequency derating, power limits, PV connection mode |
+| `async_set_parameter(param, value)` | Write a system or protection parameter (number, or an option name such as `"enable"`) |
+| `async_set_power_factor(pf)` / `async_set_reactive_mode(mode)` | Fixed power factor (±0.8–1) and reactive mode (`off`, `power_factor`, `qt`, `q_p`, `q_u`) |
+| `async_reboot_datalogger()` | Restart the WiNet-S |
 | `async_get_grid_parameters()` | `GridParameter` list: grid-protection thresholds and trip times |
 | `async_set_inverter_on(on)` | Starts or stops generation (holding register 5005) |
 | `async_set_power_limit_enabled(enabled)` | Switches power limitation on or off (5006) |

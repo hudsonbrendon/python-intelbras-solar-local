@@ -30,8 +30,14 @@ async def test_info_uses_ws_token_on_http(winet_server):
     assert info.cloud_server == "app.isolarcloud.com"
     assert info.timezone == "UTC-03:00"
     assert info.wifi_connected is True and info.ethernet_connected is False
+    assert info.country == "brazil_240"
+    assert info.hotspot_ssid == "IN-B12345"
+    assert info.ntp_server == "ntp.api.bz"
+    assert info.iec104_enabled is True
     paths = [p for p, _ in winet_server.http_calls]
-    assert paths == ["/about/list", "/device/overview"]
+    assert paths == [
+        "/about/list", "/device/overview", "/wifi/listAP", "/time/get", "/transmit/list"
+    ]
 
 
 async def test_wifi_signal_scans_then_polls(winet_server):
@@ -116,3 +122,68 @@ async def test_connect_gives_up_after_retry(winet_server):
     async with aiohttp.ClientSession() as session:
         with pytest.raises(IntelbrasSolarConnectionError):
             await _client(session, winet_server).async_get_info()
+
+
+async def test_system_parameters_parse_ranges_and_options(winet_server):
+    from intelbras_solar_local import PARAM_SYSTEM
+
+    async with aiohttp.ClientSession() as session:
+        params = await _client(session, winet_server).async_get_parameters(
+            PARAM_SYSTEM
+        )
+    standby, pid, f1 = params
+    assert (standby.key, standby.value, standby.unit) == ("standby_time", 20.0, "s")
+    assert (standby.minimum, standby.maximum, standby.options) == (10.0, 900.0, {})
+    assert standby.kind == PARAM_SYSTEM and standby.param_id == 2
+    assert pid.options == {"enable": "170", "prohibited": "85"}
+    assert pid.option == "prohibited" and pid.unit is None
+    assert f1.key == "config_key_1001939" and f1.accuracy == 2
+
+
+async def test_set_parameter_sends_formatted_value(winet_server):
+    from intelbras_solar_local import PARAM_SYSTEM
+
+    async with aiohttp.ClientSession() as session:
+        client = _client(session, winet_server)
+        _, pid, f1 = await client.async_get_parameters(PARAM_SYSTEM)
+        await client.async_set_parameter(pid, "enable")
+        await client.async_set_parameter(f1, 60.5)
+    sent = [r for r in winet_server.received if r["service"] == "param"]
+    assert sent[0]["type"] == "1" and sent[0]["devid_array"] == ["1"]
+    assert sent[0]["list"][0] == {
+        "accuracy": 0, "id": None, "param_addr": 30310, "param_id": 5,
+        "param_name": "I18N_COMMON_PID_NIGHT_REPAIR", "param_type": 2,
+        "param_value": "170",
+    }
+    assert sent[1]["list"][0]["param_value"] == "60.50"
+
+
+async def test_set_parameter_validates_before_sending(winet_server):
+    from intelbras_solar_local import PARAM_SYSTEM
+
+    async with aiohttp.ClientSession() as session:
+        client = _client(session, winet_server)
+        standby, pid, _ = await client.async_get_parameters(PARAM_SYSTEM)
+        with pytest.raises(ValueError):
+            await client.async_set_parameter(standby, 5)
+        with pytest.raises(ValueError):
+            await client.async_set_parameter(pid, "maybe")
+    assert not [r for r in winet_server.received if r["service"] == "param"]
+
+
+async def test_set_parameter_rejected_by_inverter(winet_server):
+    from intelbras_solar_local import PARAM_SYSTEM, IntelbrasSolarProtocolError
+
+    winet_server.param_result["value"] = -1
+    async with aiohttp.ClientSession() as session:
+        client = _client(session, winet_server)
+        standby, _, _ = await client.async_get_parameters(PARAM_SYSTEM)
+        with pytest.raises(IntelbrasSolarProtocolError):
+            await client.async_set_parameter(standby, 30)
+
+
+async def test_reboot_posts_maintenance(winet_server):
+    async with aiohttp.ClientSession() as session:
+        await _client(session, winet_server).async_reboot()
+    path, form = winet_server.http_calls[-1]
+    assert path == "/system/maintenance" and form["reboot"] == "1"

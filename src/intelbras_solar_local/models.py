@@ -1,6 +1,7 @@
 """Typed models parsed from inverter registers and datalogger messages."""
 from __future__ import annotations
 
+import re
 import struct
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -11,9 +12,13 @@ from .const import (
     ENABLE,
     FAULT_NAMES,
     FAULT_STATE,
+    PARAM_PROTECTION,
     PRODUCING_STATES,
+    REACTIVE_MODES,
+    REG_POWER_FACTOR,
     REG_POWER_LIMIT,
     REG_POWER_LIMIT_SWITCH,
+    REG_REACTIVE_MODE,
     REG_START_STOP,
     STOP,
     WORK_STATES,
@@ -57,6 +62,10 @@ class DataloggerInfo:
     timezone: str | None = None
     wifi_connected: bool | None = None
     ethernet_connected: bool | None = None
+    country: str | None = None  # grid code, e.g. "brazil_240"
+    hotspot_ssid: str | None = None
+    ntp_server: str | None = None
+    iec104_enabled: bool | None = None  # IEC 60870-5-104 server on port 2404
 
 
 @dataclass
@@ -68,13 +77,48 @@ class WifiSignal:
 
 
 @dataclass
-class GridParameter:
-    """One grid-protection setting of the inverter (read-only here)."""
+class Parameter:
+    """One inverter setting from the web UI's parameter pages.
+
+    ``kind`` is :data:`PARAM_SYSTEM` or :data:`PARAM_PROTECTION`. ``options``
+    maps option names (``enable``, ``curve_a``...) to the raw values the
+    datalogger expects; numeric parameters have ``minimum``/``maximum`` and
+    ``accuracy`` decimals instead. ``levels`` lists the protection levels a
+    protection parameter applies to (``None`` = always).
+    """
 
     key: str
     value: float | str | None
     unit: str | None
     register: int | None
+    kind: int = PARAM_PROTECTION
+    param_id: int | None = None
+    accuracy: int = 0
+    minimum: float | None = None
+    maximum: float | None = None
+    options: dict[str, str] = field(default_factory=dict)
+    levels: list[int] | None = None
+    raw_name: str = ""
+    param_type: int | None = None
+
+    @property
+    def option(self) -> str | None:
+        """Option name of the current value, for option parameters."""
+        for name, raw in self.options.items():
+            if self.value is not None and _same(raw, self.value):
+                return name
+        return None
+
+
+# Kept for 0.2/0.3 callers.
+GridParameter = Parameter
+
+
+def _same(raw: str, value: float | str) -> bool:
+    try:
+        return float(raw) == float(value)
+    except (TypeError, ValueError):
+        return str(raw) == str(value)
 
 
 @dataclass
@@ -146,6 +190,8 @@ class InverterStatus:
     mppts: list[Mppt] = field(default_factory=list)
     arm_firmware: str | None = None
     dsp_firmware: str | None = None
+    power_factor_setting: float | None = None
+    reactive_mode: str | None = None  # see REACTIVE_MODES
     datalogger: DataloggerStatus | None = None
 
     @property
@@ -232,6 +278,10 @@ def parse_registers(inp: dict[int, int], hold: dict[int, int]) -> InverterStatus
         inverter_on=hold[REG_START_STOP] != STOP,
         power_limit_enabled=hold[REG_POWER_LIMIT_SWITCH] == ENABLE,
         power_limit=hold[REG_POWER_LIMIT] / 10,
+        power_factor_setting=s16(hold[REG_POWER_FACTOR]) / 1000
+        if REG_POWER_FACTOR in hold
+        else None,
+        reactive_mode=REACTIVE_MODES.get(hold.get(REG_REACTIVE_MODE, -1)),
         clock=clock,
         # Two MPPTs on the IONS-5K M5; models with a third use 5014/5015.
         mppts=[Mppt(inp[a] / 10, inp[a + 1] / 10) for a in (5010, 5012)],
@@ -275,14 +325,29 @@ def _labelled(items: list[dict[str, Any]]) -> dict[str, str]:
 
 
 def parse_datalogger_info(
-    about: dict[str, Any], overview: dict[str, Any]
+    about: dict[str, Any],
+    overview: dict[str, Any],
+    access_point: dict[str, Any] | None = None,
+    clock_settings: dict[str, Any] | None = None,
+    transmit: dict[str, Any] | None = None,
 ) -> DataloggerInfo:
-    """Build a :class:`DataloggerInfo` from ``/about/list`` and ``/device/overview``."""
+    """Build a :class:`DataloggerInfo` from the web UI's system pages.
+
+    ``about``/``overview`` come from ``/about/list`` and ``/device/overview``;
+    the optional ones from ``/wifi/listAP``, ``/time/get`` and
+    ``/transmit/list``.
+    """
     labels = _labelled(about.get("list") or [])
     module = overview.get("module_info") or {}
     net = overview.get("net_info") or {}
     remote = overview.get("remote_info") or {}
     clock = overview.get("sys_time") or {}
+    inverter = (overview.get("list") or [{}])[0]
+    ap = ((access_point or {}).get("list") or [{}])[0]
+    iec104 = None
+    for group in (transmit or {}).get("list") or []:
+        if group.get("name") == "iec104":
+            iec104 = any(str(s.get("enable")) == "1" for s in group.get("list") or [])
 
     def flag(value: Any) -> bool | None:
         return None if value is None else str(value) == "1"
@@ -296,14 +361,29 @@ def parse_datalogger_info(
         timezone=clock.get("timezone"),
         wifi_connected=flag(net.get("wifi_conn_sts")),
         ethernet_connected=flag(net.get("eth_conn_sts")),
+        country=_option_key(country) if (country := inverter.get("country")) else None,
+        hotspot_ssid=ap.get("ssid"),
+        ntp_server=(clock_settings or {}).get("ntp_server"),
+        iec104_enabled=iec104,
     )
 
 
-_UNITS = {"V": "V", "Hz": "Hz", "s": "s"}
+_UNITS = {"V", "Hz", "s", "%", "kW", "kVA", "kWh", "%/min"}
+_RANGE = re.compile(r"\[\s*(-?[\d.]+)\s*~\s*(-?[\d.]+)\s*\]")
 
 
-def parse_grid_parameters(items: list[dict[str, Any]]) -> list[GridParameter]:
-    """Build :class:`GridParameter` items from ``/device/getParam?type=2``."""
+def _param_key(raw_name: str) -> str:
+    return raw_name.removeprefix("I18N_COMMON_").removeprefix("I18N_").lower()
+
+
+def _option_key(raw_name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", _param_key(raw_name)).strip("_")
+
+
+def parse_parameters(
+    items: list[dict[str, Any]], kind: int = PARAM_PROTECTION
+) -> list[Parameter]:
+    """Build :class:`Parameter` items from ``/device/getParam?type=<kind>``."""
     params = []
     for item in items:
         raw = item.get("param_value")
@@ -311,17 +391,38 @@ def parse_grid_parameters(items: list[dict[str, Any]]) -> list[GridParameter]:
             value: float | str | None = float(raw)
         except (TypeError, ValueError):
             value = raw if raw not in (None, "", "--") else None
+        bounds = _RANGE.search(str(item.get("range") or ""))
+        levels = item.get("relation")
+        if isinstance(levels, str):
+            levels = [int(x) for x in re.findall(r"\d+", levels)]
+        raw_name = str(item.get("param_name", ""))
         params.append(
-            GridParameter(
-                key=str(item.get("param_name", ""))
-                .removeprefix("I18N_COMMON_")
-                .lower(),
+            Parameter(
+                key=_param_key(raw_name),
                 value=value,
-                unit=_UNITS.get(str(item.get("unit"))),
+                unit=str(item["unit"]) if item.get("unit") in _UNITS else None,
                 register=item.get("param_addr"),
+                kind=kind,
+                param_id=item.get("param_id"),
+                accuracy=int(item.get("accuracy") or 0),
+                minimum=float(bounds[1]) if bounds else None,
+                maximum=float(bounds[2]) if bounds else None,
+                options={
+                    _option_key(str(o["name"])): str(o["value"])
+                    for o in item.get("options") or []
+                    if isinstance(o, dict)
+                },
+                levels=levels or None,
+                raw_name=raw_name,
+                param_type=item.get("param_type"),
             )
         )
     return params
+
+
+def parse_grid_parameters(items: list[dict[str, Any]]) -> list[Parameter]:
+    """Grid-protection parameters (``/device/getParam?type=2``)."""
+    return parse_parameters(items, PARAM_PROTECTION)
 
 
 def _number(value: Any) -> float | None:

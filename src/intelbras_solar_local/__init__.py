@@ -5,6 +5,10 @@ from .const import (
     DEFAULT_UNIT,
     DEFAULT_WINET_PORT,
     DEVICE_MODELS,
+    FAULT_NAMES,
+    PARAM_PROTECTION,
+    PARAM_SYSTEM,
+    REACTIVE_MODES,
     WORK_STATES,
 )
 from .exceptions import (
@@ -21,6 +25,7 @@ from .models import (
     InverterInfo,
     InverterStatus,
     Mppt,
+    Parameter,
     WifiSignal,
     parse_datalogger,
     parse_datalogger_info,
@@ -28,6 +33,7 @@ from .models import (
     parse_firmware,
     parse_grid_parameters,
     parse_inverter_info,
+    parse_parameters,
     parse_registers,
 )
 from .winet import WiNetClient
@@ -39,6 +45,7 @@ __all__ = [
     "DataloggerInfo",
     "WifiSignal",
     "GridParameter",
+    "Parameter",
     "InverterInfo",
     "FaultEvent",
     "Mppt",
@@ -47,6 +54,7 @@ __all__ = [
     "parse_datalogger_info",
     "parse_firmware",
     "parse_grid_parameters",
+    "parse_parameters",
     "parse_inverter_info",
     "parse_fault_history",
     "ModbusTcpClient",
@@ -59,5 +67,9 @@ __all__ = [
     "DEFAULT_WINET_PORT",
     "DEVICE_MODELS",
     "WORK_STATES",
+    "FAULT_NAMES",
+    "PARAM_SYSTEM",
+    "PARAM_PROTECTION",
+    "REACTIVE_MODES",
 ]
-__version__ = "0.3.2"
+__version__ = "0.4.0"

@@ -30,7 +30,7 @@ FIRMWARE = _ascii_regs(5799, "ARM_SUNSTONE-S_V11_V01_A") | _ascii_regs(
 
 HOLDING = {
     4999: 2026, 5000: 10, 5001: 24, 5002: 14, 5003: 51, 5004: 39,
-    5005: 0xCF, 5006: 0xAA, 5007: 1000,
+    5005: 0xCF, 5006: 0xAA, 5007: 1000, 5018: 0xFC18, 5035: 0xA1,  # pf -1.000
 }
 
 WINET_REPLIES = {
@@ -70,6 +70,32 @@ OVERVIEW = {
     "net_info": {"wifi_conn_sts": 1, "eth_conn_sts": 0},
     "remote_info": {"ip": "app.isolarcloud.com"},
     "sys_time": {"timezone": "UTC-03:00"},
+    "list": [{"dev_sn": "XS123456780", "country": "I18N_COMMON_BRAZIL_240"}],
+}
+ACCESS_POINT = {"list": [{"name": "Wifi AP", "ssid": "IN-B12345"}], "count": 1}
+CLOCK_SETTINGS = {"ntp_server": "ntp.api.bz", "curr_timezone": "UTC-03:00"}
+TRANSMIT = {
+    "list": [
+        {"name": "third_cloud", "list": [{"name": "mc_cloud", "enable": "0"}]},
+        {"name": "iec104", "list": [{"name": "iec104_svr1", "enable": "1"}]},
+    ]
+}
+_ON_OFF = [
+    {"name": "I18N_COMMON_ENABLE", "value": "170"},
+    {"name": "I18N_COMMON_PROHIBITED", "value": "85"},
+]
+SYSTEM_PARAMS = {
+    "list": [
+        {"param_id": 2, "param_addr": 30091, "param_type": 2, "accuracy": 0,
+         "param_name": "I18N_COMMON_STANDBY_TIME", "param_value": "20", "unit": "s",
+         "range": "[10~900]", "options": "", "relation": ""},
+        {"param_id": 5, "param_addr": 30310, "param_type": 2, "accuracy": 0,
+         "param_name": "I18N_COMMON_PID_NIGHT_REPAIR", "param_value": "85",
+         "unit": "", "range": "", "options": _ON_OFF, "relation": ""},
+        {"param_id": 9, "param_addr": 31404, "param_type": 2, "accuracy": 2,
+         "param_name": "I18N_CONFIG_KEY_1001939", "param_value": "60.20",
+         "unit": "Hz", "range": "[60.02~65.00]", "options": "", "relation": ""},
+    ]
 }
 DEVICE_INFO = {
     "list": [
@@ -184,6 +210,7 @@ async def winet_server():
     http_calls: list[tuple[str, dict]] = []
     scan = {"requested": False, "polls": 0}
     drops = {"connect": 0}
+    param_result = {"value": 0}
 
     async def handler(request):
         ws = web.WebSocketResponse()
@@ -199,6 +226,17 @@ async def winet_server():
                 drops["connect"] -= 1
                 await ws.close()
                 return ws
+            if service == "param":
+                rows = [{"param_id": 0, "param_pid": -1, "result": -1}] + [
+                    {"param_id": i["param_id"], "param_pid": 0,
+                     "result": param_result["value"]}
+                    for i in req["list"]
+                ]
+                await ws.send_str(json.dumps({
+                    "result_code": 1,
+                    "result_data": {"service": "param", "count": 1, "list": rows},
+                }))
+                continue
             if service == "stalist":
                 scan["polls"] += 1
                 ready = scan["requested"] and scan["polls"] >= 2
@@ -233,6 +271,8 @@ async def winet_server():
             if path == "/wifi/updateStaScan":
                 scan["requested"] = True
             data = body
+            if path == "/device/getParam" and params.get("type") == "1":
+                data = SYSTEM_PARAMS
             if path == "/historyfault/list":
                 size, page = int(params["limit"]), int(params["page"])
                 rows = body["list"][(page - 1) * size : page * size]
@@ -250,6 +290,10 @@ async def winet_server():
     app.router.add_get("/device/getParam", http("/device/getParam", PARAMS))
     app.router.add_post("/wifi/updateStaScan", http("/wifi/updateStaScan", {}))
     app.router.add_get("/device/getInfo", http("/device/getInfo", DEVICE_INFO))
+    app.router.add_get("/wifi/listAP", http("/wifi/listAP", ACCESS_POINT))
+    app.router.add_get("/time/get", http("/time/get", CLOCK_SETTINGS))
+    app.router.add_get("/transmit/list", http("/transmit/list", TRANSMIT))
+    app.router.add_post("/system/maintenance", http("/system/maintenance", {}))
     app.router.add_post("/historyfault/list", http("/historyfault/list", FAULT_HISTORY))
     server = TestServer(app, host="127.0.0.1")
     await server.start_server()
@@ -257,5 +301,6 @@ async def winet_server():
     server.received = received
     server.http_calls = http_calls
     server.drops = drops
+    server.param_result = param_result
     yield server
     await server.close()

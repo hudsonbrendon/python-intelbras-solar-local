@@ -18,9 +18,13 @@ from .const import (
     FIRMWARE_BLOCK,
     HOLDING_BLOCKS,
     INPUT_BLOCKS,
+    PARAM_SYSTEM,
+    REACTIVE_MODES,
     REG_CLOCK,
+    REG_POWER_FACTOR,
     REG_POWER_LIMIT,
     REG_POWER_LIMIT_SWITCH,
+    REG_REACTIVE_MODE,
     REG_START_STOP,
     START,
     STOP,
@@ -30,9 +34,9 @@ from .modbus import ModbusTcpClient
 from .models import (
     DataloggerInfo,
     FaultEvent,
-    GridParameter,
     InverterInfo,
     InverterStatus,
+    Parameter,
     WifiSignal,
     parse_firmware,
     parse_registers,
@@ -147,7 +151,7 @@ class IntelbrasSolarClient:
         """Joined Wi-Fi network and RSSI (runs a ~3 s station scan)."""
         return await self.winet.async_get_wifi_signal()
 
-    async def async_get_grid_parameters(self) -> list[GridParameter]:
+    async def async_get_grid_parameters(self) -> list[Parameter]:
         """Grid-protection thresholds and trip times."""
         return await self.winet.async_get_grid_parameters()
 
@@ -174,6 +178,40 @@ class IntelbrasSolarClient:
         if not 0 <= percent <= 100:
             raise ValueError("percent must be between 0 and 100")
         await self.modbus.async_write(REG_POWER_LIMIT, round(percent * 10))
+
+    async def async_set_power_factor(self, power_factor: float) -> None:
+        """Set the fixed power factor: -1 to -0.8 or 0.8 to 1.
+
+        It only takes effect while the reactive mode is ``power_factor``.
+        """
+        if not 0.8 <= abs(power_factor) <= 1:
+            raise ValueError("power factor must be between 0.8 and 1 (or -1 and -0.8)")
+        await self.modbus.async_write(
+            REG_POWER_FACTOR, round(power_factor * 1000) & 0xFFFF
+        )
+
+    async def async_set_reactive_mode(self, mode: str) -> None:
+        """Set the reactive power regulation mode (a value of REACTIVE_MODES)."""
+        raw = {name: code for code, name in REACTIVE_MODES.items()}.get(mode)
+        if raw is None:
+            raise ValueError(f"mode must be one of {sorted(REACTIVE_MODES.values())}")
+        await self.modbus.async_write(REG_REACTIVE_MODE, raw)
+
+    async def async_get_system_parameters(self) -> list[Parameter]:
+        """System settings: reconnection times, PID recovery, derating..."""
+        return await self.winet.async_get_parameters(PARAM_SYSTEM)
+
+    async def async_get_parameters(self, kind: int) -> list[Parameter]:
+        """Parameters of one group (PARAM_SYSTEM or PARAM_PROTECTION)."""
+        return await self.winet.async_get_parameters(kind)
+
+    async def async_set_parameter(self, param: Parameter, value: float | str) -> None:
+        """Write one system or protection parameter (see WiNetClient)."""
+        await self.winet.async_set_parameter(param, value)
+
+    async def async_reboot_datalogger(self) -> None:
+        """Reboot the WiNet-S datalogger."""
+        await self.winet.async_reboot()
 
     async def async_set_clock(self, when: datetime) -> None:
         """Set the inverter clock (one register per field)."""

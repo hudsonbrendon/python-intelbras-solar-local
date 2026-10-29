@@ -43,7 +43,7 @@ async def test_controls_write_expected_registers(inverter):
 
 
 def test_version():
-    assert __version__ == "0.3.2"
+    assert __version__ == "0.4.0"
 
 
 async def test_firmware_read_once_and_retried_after_failure(inverter):
@@ -63,3 +63,17 @@ async def test_firmware_read_once_and_retried_after_failure(inverter):
         second = await client.async_get_inverter_data()
     assert first.dsp_firmware == second.dsp_firmware == "MDSP_SUNSTONE-S_V11_V01_A"
     assert reads.count(FIRMWARE_BLOCK[0]) == 1
+
+
+async def test_power_factor_and_reactive_mode(inverter):
+    async with IntelbrasSolarClient("127.0.0.1", inverter.port) as client:
+        status = await client.async_get_inverter_data()
+        assert status.power_factor_setting == -1.0
+        assert status.reactive_mode == "power_factor"
+        await client.async_set_power_factor(-0.95)
+        await client.async_set_reactive_mode("off")
+        with pytest.raises(ValueError):
+            await client.async_set_power_factor(0.5)
+        with pytest.raises(ValueError):
+            await client.async_set_reactive_mode("turbo")
+    assert inverter.writes[-2:] == [(1, 5018, 0xFC4A), (1, 5035, 0x55)]

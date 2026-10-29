@@ -21,7 +21,8 @@ FC_WRITE_SINGLE = 6
 # (start, count) blocks polled on every cycle. The holding block stops before
 # 5019: reading it in a block fails with Modbus exception 4 on the IONS-5K M5.
 INPUT_BLOCKS: tuple[tuple[int, int], ...] = ((4989, 61), (5050, 100), (5225, 2))
-HOLDING_BLOCKS: tuple[tuple[int, int], ...] = ((4999, 9),)
+# Single reads past 5007: a block read fails with exception 4 at register 5019.
+HOLDING_BLOCKS: tuple[tuple[int, int], ...] = ((4999, 9), (5018, 1), (5035, 1))
 
 # Inverter firmware: ARM at 5799 and DSP at 5814, 15 ASCII registers each.
 # Read once: the WiNet-S answers blocks that touch unmapped registers with an
@@ -36,11 +37,19 @@ WINET_HTTP_PARAMS = "/device/getParam"
 WINET_HTTP_WIFI_SCAN = "/wifi/updateStaScan"
 WINET_HTTP_DEVICE_INFO = "/device/getInfo"
 WINET_HTTP_FAULT_HISTORY = "/historyfault/list"
+WINET_HTTP_MAINTENANCE = "/system/maintenance"
+WINET_HTTP_AP = "/wifi/listAP"
+WINET_HTTP_TIME = "/time/get"
+WINET_HTTP_TRANSMIT = "/transmit/list"
+
+# Parameter groups of /device/getParam and the WebSocket "param" service.
+PARAM_SYSTEM = 1
+PARAM_PROTECTION = 2
 WIFI_SCAN_TIMEOUT = 20
 
 # Grid-fault codes of the datalogger's fault history (/historyfault/list), from
-# the web UI's default fault table. Codes the table only labels generically
-# ("fault_codeNN_name") are left out and reported as ``fault_<code>``.
+# the web UI's fault table and language files. Unknown codes are reported as
+# ``fault_<code>``.
 FAULT_NAMES = {
     1: "grid_over_voltage",
     2: "grid_under_voltage",
@@ -65,6 +74,20 @@ FAULT_NAMES = {
     35: "pv_grounding_fault",
     62: "hardware_fault",
     1001: "external_power_supply",
+    # Codes the web UI's table names only through its language files.
+    9: "pv_reverse_connection_fault",
+    10: "pv_reverse_connection_alarm",
+    11: "pv_abnormal_alarm",
+    13: "ambient_under_temperature",
+    17: "backup_load_overpower",
+    20: "grid_conflict",
+    21: "parallel_communication",
+    24: "battery_alarm",
+    25: "battery_fault",
+    26: "pv_overvoltage",
+    27: "mppt_reverse_connection",
+    63: "system_alarm",
+    64: "system_fault",
 }
 
 # Writable holding registers
@@ -72,6 +95,19 @@ REG_CLOCK = 4999  # year, month, day, hour, minute, second (6 registers)
 REG_START_STOP = 5005
 REG_POWER_LIMIT_SWITCH = 5006
 REG_POWER_LIMIT = 5007  # 0.1 %
+REG_POWER_FACTOR = 5018  # S16, 0.001; |pf| between 0.8 and 1
+REG_REACTIVE_MODE = 5035
+
+# Reactive power regulation modes (REG_REACTIVE_MODE). The reactive power
+# percentage register next to it reads 0xFFFF on the IONS-5K, so "qt" is
+# listed for completeness but likely unsupported.
+REACTIVE_MODES = {
+    0x55: "off",
+    0xA1: "power_factor",
+    0xA2: "qt",
+    0xA3: "q_p",
+    0xA4: "q_u",
+}
 
 START = 0xCF
 STOP = 0xCE

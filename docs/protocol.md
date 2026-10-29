@@ -27,6 +27,8 @@ The server also pushes unsolicited `notice` messages, so match each reply on its
 | `fault` | Active fault list |
 | `real` (`dev_id`) | Realtime values the web UI shows per device; Modbus covers them all |
 | `statistics`, `runtime` | Plant totals, rated reactive power (3 kvar) and the reactive limits, online/offline device counts |
+| `param` (`type` 1/2/3, `dev_code`, `dev_type`, `devid_array`, `count`, `list`) | Writes parameters; no login needed. Each `list` item carries `accuracy`, `id`, `param_addr`, `param_id`, `param_name`, `param_type` and the new `param_value` as the web UI formats it. The reply lists `result` per parameter (0 ok, -1 failed). `type` 3 takes commands such as `power_switch` and `factory_reset` |
+| `direct` (`dev_id`) | MPPT voltage and current, the same values as Modbus |
 | `stalist` | After a scan: `curr_ssid`, `curr_signal` (dBm) and the visible APs. Before a scan it returns `result_code` 208 |
 | `real_battery`, `deviceInfo` | `result_code` 211/215 on this model (not supported) |
 
@@ -45,6 +47,10 @@ JSON with a `text/html` content type.
 | `POST /historyfault/list` (`dev_id`, `dev_type`, `dev_code`, `fault`, `warning`, `start_time`, `end_time`, `page`, `limit`) | Fault history: `warning_time`, `warning_level` (1 fault, 0/2 warning, 3 prompt), `warning_code`, `warning_reason`, `warning_appear` (1 raised, 0 cleared). `page=limit=-1` (the web UI export) sometimes returns an empty list; page with `page`/`limit` instead. An `end_time` past 2038-01-19 fails with `I18N_COMMON_INTER_ABNORMAL` (32-bit `time_t`) |
 | `GET /device/getParam?type=1` | System parameters: standby time, fault recovery time, PID night repair, over-frequency derating curve, rated power, PV access mode |
 | `POST /inverter/list` | Inverter list with COM port, Modbus address and link status |
+| `GET /device/getParam?type=3&param_addr&param_num` | Raw read of holding registers by Sungrow (1-based) address, as hex bytes |
+| `POST /device/setParam` (`param_addr`, `param_size`, `param_value`, `param_type`) | Raw register write (the web UI's "order parameters") |
+| `POST /system/maintenance` (`reboot=1` / `factory_reset=1`) | Restarts or factory-resets the datalogger |
+| `GET /wifi/listAP`, `/time/get`, `/transmit/list` | Hotspot SSID, NTP server and time zone, IEC 104 and third-party cloud forwarding |
 | `GET /device/getParam?type=0` | Country / grid-code catalogue |
 | `GET /wifi/listAP`, `/time/get`, `/serial/list`, `/transmit/list`, `/4g/list` | Hotspot SSID, NTP settings, COM port, IEC 104 / third-party cloud forwarding, APN |
 
@@ -90,6 +96,8 @@ first.
 | 5005 | `0xCF` start, `0xCE` stop |
 | 5006 | Power limitation: `0xAA` on, `0x55` off |
 | 5007 | Power limit in 0.1 % |
+| 5018 | Power factor setting, S16 0.001 (±0.8–1) |
+| 5035 | Reactive mode: `0x55` off, `0xA1` power factor, `0xA2` Qt, `0xA3` Q(P), `0xA4` Q(U) |
 
 Reads that touch unmapped input registers (for example 4900–4988 or 6000–6400) get an empty frame (MBAP length 2)
 instead of a Modbus exception, and the client raises `IntelbrasSolarProtocolError`. On this unit, a block read of the holding registers fails with exception 4 once it reaches register 5019.

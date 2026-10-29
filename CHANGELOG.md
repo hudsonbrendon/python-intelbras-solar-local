@@ -2,6 +2,36 @@
 
 All notable changes to this project are documented here.
 
+## [0.4.0] - 2026-10-29
+
+### Added
+- `Parameter` replaces `GridParameter`, which stays as an alias. It now carries
+  everything the web UI shows for a setting: group (`PARAM_SYSTEM` /
+  `PARAM_PROTECTION`), range, decimals, options, the protection levels it
+  applies to, and the raw identifiers needed to write it.
+- `async_get_system_parameters()` / `async_get_parameters(kind)` read the
+  system settings: connecting and reconnecting time, PID recovery, grid
+  voltage rise suppression, over-frequency derating, rated active and
+  apparent power limits, PV connection mode and total yield adjustment.
+- `async_set_parameter(param, value)` writes a system or protection parameter
+  through the web UI's WebSocket `param` service, with no login needed. The
+  value is checked against the range or options before sending, and an
+  inverter rejection raises `IntelbrasSolarProtocolError`.
+- `async_set_power_factor()` and `async_set_reactive_mode()` (holding registers
+  5018 and 5035). `InverterStatus.power_factor_setting` / `reactive_mode` read
+  them back.
+- `async_reboot_datalogger()` restarts the WiNet-S.
+- `DataloggerInfo` gains `country` (grid code), `hotspot_ssid`, `ntp_server`
+  and `iec104_enabled`.
+- `FAULT_NAMES` covers every code in the web UI's fault table. `FAULT_NAMES`,
+  `PARAM_SYSTEM`, `PARAM_PROTECTION` and `REACTIVE_MODES` are exported.
+
+### Fixed
+- `async_get_wifi_signal()` sometimes returned a reading 20–30 dB too low. The
+  scan drops the WebSocket about 2 s in, and the old code could read the
+  signal mid-scan. It now starts the scan, waits 5 s and reads the result in a
+  fresh session.
+
 ## [0.3.2] - 2026-10-28
 
 ### Fixed
