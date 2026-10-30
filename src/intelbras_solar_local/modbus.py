@@ -3,6 +3,7 @@
 Only what the inverter needs, with no third-party dependency, so it never
 clashes with the ``pymodbus`` version pinned by Home Assistant.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -42,7 +43,7 @@ class ModbusTcpClient:
         self._writer: asyncio.StreamWriter | None = None
         # Random start: the WiNet-S can leak replies across concurrent clients,
         # and two clients both counting from 1 would accept each other's frames.
-        self._tid = random.randrange(0x10000)
+        self._tid = random.randrange(0x10000)  # noqa: S311
         # The WiNet-S serves one request at a time; serialize every call.
         self._lock = asyncio.Lock()
 
@@ -104,7 +105,7 @@ class ModbusTcpClient:
             self._reader, self._writer = await asyncio.open_connection(
                 self.host, self.port
             )
-        assert self._reader is not None
+        assert self._reader is not None  # noqa: S101
         self._tid = (self._tid + 1) & 0xFFFF
         self._writer.write(_MBAP.pack(self._tid, 0, len(pdu) + 1, self.unit) + pdu)
         await self._writer.drain()

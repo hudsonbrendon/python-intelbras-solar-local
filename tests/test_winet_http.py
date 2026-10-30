@@ -1,11 +1,11 @@
 """Tests for the WiNet-S HTTP endpoints and the Wi-Fi scan."""
+
 from __future__ import annotations
 
 import aiohttp
 import pytest
 
-from intelbras_solar_local import WiNetClient
-from intelbras_solar_local import winet as winet_mod
+from intelbras_solar_local import WiNetClient, winet as winet_mod
 
 
 @pytest.fixture(autouse=True)
@@ -15,9 +15,7 @@ def fast_scan(monkeypatch):
 
 
 def _client(session, server):
-    return WiNetClient(
-        "127.0.0.1", session, port=server.port, http_port=server.port
-    )
+    return WiNetClient("127.0.0.1", session, port=server.port, http_port=server.port)
 
 
 async def test_info_uses_ws_token_on_http(winet_server):
@@ -36,7 +34,11 @@ async def test_info_uses_ws_token_on_http(winet_server):
     assert info.iec104_enabled is True
     paths = [p for p, _ in winet_server.http_calls]
     assert paths == [
-        "/about/list", "/device/overview", "/wifi/listAP", "/time/get", "/transmit/list"
+        "/about/list",
+        "/device/overview",
+        "/wifi/listAP",
+        "/time/get",
+        "/transmit/list",
     ]
 
 
@@ -57,7 +59,10 @@ async def test_grid_parameters_use_first_device(winet_server):
     ]
     query = winet_server.http_calls[0][1]
     assert (query["type"], query["dev_id"], query["dev_type"], query["dev_code"]) == (
-        "2", "1", "21", "9748"
+        "2",
+        "1",
+        "21",
+        "9748",
     )
 
 
@@ -106,7 +111,6 @@ async def test_fault_history_pages_until_count(winet_server, monkeypatch):
     assert len(events) == 4
 
 
-
 async def test_connect_retries_once_when_dropped(winet_server):
     winet_server.drops["connect"] = 1
     async with aiohttp.ClientSession() as session:
@@ -128,9 +132,7 @@ async def test_system_parameters_parse_ranges_and_options(winet_server):
     from intelbras_solar_local import PARAM_SYSTEM
 
     async with aiohttp.ClientSession() as session:
-        params = await _client(session, winet_server).async_get_parameters(
-            PARAM_SYSTEM
-        )
+        params = await _client(session, winet_server).async_get_parameters(PARAM_SYSTEM)
     standby, pid, f1 = params
     assert (standby.key, standby.value, standby.unit) == ("standby_time", 20.0, "s")
     assert (standby.minimum, standby.maximum, standby.options) == (10.0, 900.0, {})
@@ -151,8 +153,12 @@ async def test_set_parameter_sends_formatted_value(winet_server):
     sent = [r for r in winet_server.received if r["service"] == "param"]
     assert sent[0]["type"] == "1" and sent[0]["devid_array"] == ["1"]
     assert sent[0]["list"][0] == {
-        "accuracy": 0, "id": None, "param_addr": 30310, "param_id": 5,
-        "param_name": "I18N_COMMON_PID_NIGHT_REPAIR", "param_type": 2,
+        "accuracy": 0,
+        "id": None,
+        "param_addr": 30310,
+        "param_id": 5,
+        "param_name": "I18N_COMMON_PID_NIGHT_REPAIR",
+        "param_type": 2,
         "param_value": "170",
     }
     assert sent[1]["list"][0]["param_value"] == "60.50"

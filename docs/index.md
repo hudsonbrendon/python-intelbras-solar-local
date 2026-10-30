@@ -19,10 +19,12 @@ pip install python-intelbras-solar-local
 import asyncio
 from intelbras_solar_local import IntelbrasSolarClient
 
+
 async def main():
     async with IntelbrasSolarClient("192.168.31.17") as client:
         status = await client.async_get_status()
         print(status.model, status.power_ac, status.energy_today)
+
 
 asyncio.run(main())
 ```

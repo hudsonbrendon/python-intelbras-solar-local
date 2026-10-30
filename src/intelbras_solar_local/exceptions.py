@@ -1,4 +1,5 @@
 """Exceptions for the Intelbras Solar local client."""
+
 from __future__ import annotations
 
 

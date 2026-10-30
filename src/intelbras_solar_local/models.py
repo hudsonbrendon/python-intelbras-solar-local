@@ -1,10 +1,11 @@
 """Typed models parsed from inverter registers and datalogger messages."""
+
 from __future__ import annotations
 
-import re
-import struct
 from dataclasses import dataclass, field
 from datetime import datetime
+import re
+import struct
 from typing import Any
 
 from .const import (
@@ -249,7 +250,7 @@ def parse_registers(inp: dict[int, int], hold: dict[int, int]) -> InverterStatus
 
     serial = b"".join(struct.pack(">H", inp[a]) for a in range(4989, 4999))
     try:
-        clock = datetime(*(hold[a] for a in range(4999, 5005)))
+        clock = datetime(*(hold[a] for a in range(4999, 5005)))  # type: ignore[arg-type]
     except ValueError:
         clock = None
     return InverterStatus(
@@ -303,7 +304,6 @@ def parse_datalogger(
     )
 
 
-
 def _ascii(regs: dict[int, int], start: int, count: int) -> str | None:
     addresses = range(start, start + count)
     raw = b"".join(struct.pack(">H", regs.get(a, 0)) for a in addresses)
@@ -319,7 +319,7 @@ def parse_firmware(regs: dict[int, int]) -> tuple[str | None, str | None]:
 def _labelled(items: list[dict[str, Any]]) -> dict[str, str]:
     """Map ``I18N_COMMON_*`` ``data_name`` keys to their values."""
     return {
-        str(i.get("data_name", "")).removeprefix("I18N_COMMON_"): i.get("data_value")
+        str(i.get("data_name", "")).removeprefix("I18N_COMMON_"): i.get("data_value")  # type: ignore[misc]
         for i in items
     }
 
@@ -388,7 +388,7 @@ def parse_parameters(
     for item in items:
         raw = item.get("param_value")
         try:
-            value: float | str | None = float(raw)
+            value: float | str | None = float(raw)  # type: ignore[arg-type]
         except (TypeError, ValueError):
             value = raw if raw not in (None, "", "--") else None
         bounds = _RANGE.search(str(item.get("range") or ""))

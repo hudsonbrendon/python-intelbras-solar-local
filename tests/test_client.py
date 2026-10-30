@@ -1,4 +1,5 @@
 """Tests for the high-level client."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -37,8 +38,16 @@ async def test_controls_write_expected_registers(inverter):
         with pytest.raises(ValueError):
             await client.async_set_power_limit(101)
     assert [(a, v) for _, a, v in inverter.writes] == [
-        (5005, 0xCE), (5005, 0xCF), (5006, 0x55), (5007, 875),
-        (4999, 2026), (5000, 1), (5001, 2), (5002, 3), (5003, 4), (5004, 5),
+        (5005, 0xCE),
+        (5005, 0xCF),
+        (5006, 0x55),
+        (5007, 875),
+        (4999, 2026),
+        (5000, 1),
+        (5001, 2),
+        (5002, 3),
+        (5003, 4),
+        (5004, 5),
     ]
 
 

@@ -12,6 +12,7 @@ from intelbras_solar_local import (
     IntelbrasSolarConnectionError,
 )
 
+
 async def main():
     async with IntelbrasSolarClient("192.168.31.17") as client:
         try:
@@ -24,6 +25,7 @@ async def main():
         if status.datalogger:
             print("Wi-Fi:", status.datalogger.wifi_connected)
             print("Faults:", status.datalogger.faults)
+
 
 asyncio.run(main())
 ```
@@ -45,9 +47,9 @@ reply never turns into wrong data. Even so, keep one Modbus client per datalogge
 
 ```python
 await client.async_set_power_limit_enabled(True)
-await client.async_set_power_limit(80)      # % of nominal power
-await client.async_set_inverter_on(False)   # stop generating
-await client.async_set_inverter_on(True)    # start again
+await client.async_set_power_limit(80)  # % of nominal power
+await client.async_set_inverter_on(False)  # stop generating
+await client.async_set_inverter_on(True)  # start again
 ```
 
 ## Errors
