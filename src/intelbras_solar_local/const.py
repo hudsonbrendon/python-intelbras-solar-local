@@ -4,6 +4,7 @@ Register addresses are 0-based, as sent on the wire. Sungrow's public
 documentation numbers them 1-based, so ``doc address - 1`` maps to the
 values below.
 """
+
 from __future__ import annotations
 
 DEFAULT_PORT = 502

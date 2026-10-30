@@ -1,4 +1,5 @@
 """Tests for the WiNet-S WebSocket client."""
+
 from __future__ import annotations
 
 import aiohttp

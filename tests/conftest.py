@@ -1,23 +1,54 @@
 """Shared fixtures: captured registers and fake Modbus / WiNet servers."""
+
 from __future__ import annotations
 
 import asyncio
 import json
 import struct
 
-import pytest
 from aiohttp import web
 from aiohttp.test_utils import TestServer
+import pytest
 
 # Captured from a real IONS-5K M5 on 2026-10-24 (serial replaced).
 INPUT = {
-    4989: 0x5853, 4990: 0x3132, 4991: 0x3334, 4992: 0x3536, 4993: 0x3738,
-    4994: 0x3000, 4999: 0x2614, 5000: 50, 5002: 277, 5003: 15345, 5005: 7262,
-    5007: 645, 5008: 2265, 5010: 1890, 5011: 62, 5012: 1860, 5013: 65,
-    5016: 2408, 5018: 2310, 5021: 97, 5030: 2265, 5032: 65532, 5033: 65535,
-    5034: 1000, 5035: 600, 5070: 1663, 5112: 578, 5127: 6378, 5143: 22384,
-    5144: 2, 5146: 3770, 5147: 6006, 5225: 3533, 5226: 1,
+    4989: 0x5853,
+    4990: 0x3132,
+    4991: 0x3334,
+    4992: 0x3536,
+    4993: 0x3738,
+    4994: 0x3000,
+    4999: 0x2614,
+    5000: 50,
+    5002: 277,
+    5003: 15345,
+    5005: 7262,
+    5007: 645,
+    5008: 2265,
+    5010: 1890,
+    5011: 62,
+    5012: 1860,
+    5013: 65,
+    5016: 2408,
+    5018: 2310,
+    5021: 97,
+    5030: 2265,
+    5032: 65532,
+    5033: 65535,
+    5034: 1000,
+    5035: 600,
+    5070: 1663,
+    5112: 578,
+    5127: 6378,
+    5143: 22384,
+    5144: 2,
+    5146: 3770,
+    5147: 6006,
+    5225: 3533,
+    5226: 1,
 }
+
+
 # "ARM_SUNSTONE-S_V11_V01_A" at 5799 and "MDSP_SUNSTONE-S_V11_V01_A" at 5814.
 def _ascii_regs(start: int, text: str, count: int = 15) -> dict[int, int]:
     raw = text.encode().ljust(count * 2, b"\0")
@@ -29,14 +60,25 @@ FIRMWARE = _ascii_regs(5799, "ARM_SUNSTONE-S_V11_V01_A") | _ascii_regs(
 )
 
 HOLDING = {
-    4999: 2026, 5000: 10, 5001: 24, 5002: 14, 5003: 51, 5004: 39,
-    5005: 0xCF, 5006: 0xAA, 5007: 1000, 5018: 0xFC18, 5035: 0xA1,  # pf -1.000
+    4999: 2026,
+    5000: 10,
+    5001: 24,
+    5002: 14,
+    5003: 51,
+    5004: 39,
+    5005: 0xCF,
+    5006: 0xAA,
+    5007: 1000,
+    5018: 0xFC18,
+    5035: 0xA1,  # pf -1.000
 }
 
 WINET_REPLIES = {
     "connect": {"token": "tok-1", "uid": 1},
     "state": {
-        "total_fault": "0", "total_alarm": "1", "wifi_conn_sts": "1",
+        "total_fault": "0",
+        "total_alarm": "1",
+        "wifi_conn_sts": "1",
         "cloud_conn_sts": "0",
     },
     "fault": {"list": [], "count": 0},
@@ -86,15 +128,42 @@ _ON_OFF = [
 ]
 SYSTEM_PARAMS = {
     "list": [
-        {"param_id": 2, "param_addr": 30091, "param_type": 2, "accuracy": 0,
-         "param_name": "I18N_COMMON_STANDBY_TIME", "param_value": "20", "unit": "s",
-         "range": "[10~900]", "options": "", "relation": ""},
-        {"param_id": 5, "param_addr": 30310, "param_type": 2, "accuracy": 0,
-         "param_name": "I18N_COMMON_PID_NIGHT_REPAIR", "param_value": "85",
-         "unit": "", "range": "", "options": _ON_OFF, "relation": ""},
-        {"param_id": 9, "param_addr": 31404, "param_type": 2, "accuracy": 2,
-         "param_name": "I18N_CONFIG_KEY_1001939", "param_value": "60.20",
-         "unit": "Hz", "range": "[60.02~65.00]", "options": "", "relation": ""},
+        {
+            "param_id": 2,
+            "param_addr": 30091,
+            "param_type": 2,
+            "accuracy": 0,
+            "param_name": "I18N_COMMON_STANDBY_TIME",
+            "param_value": "20",
+            "unit": "s",
+            "range": "[10~900]",
+            "options": "",
+            "relation": "",
+        },
+        {
+            "param_id": 5,
+            "param_addr": 30310,
+            "param_type": 2,
+            "accuracy": 0,
+            "param_name": "I18N_COMMON_PID_NIGHT_REPAIR",
+            "param_value": "85",
+            "unit": "",
+            "range": "",
+            "options": _ON_OFF,
+            "relation": "",
+        },
+        {
+            "param_id": 9,
+            "param_addr": 31404,
+            "param_type": 2,
+            "accuracy": 2,
+            "param_name": "I18N_CONFIG_KEY_1001939",
+            "param_value": "60.20",
+            "unit": "Hz",
+            "range": "[60.02~65.00]",
+            "options": "",
+            "relation": "",
+        },
     ]
 }
 DEVICE_INFO = {
@@ -112,8 +181,13 @@ DEVICE_INFO = {
 }
 FAULT_HISTORY = {
     "list": [
-        {"warning_time": t, "warning_level": 1, "warning_code": code,
-         "warning_reason": "10", "warning_appear": appear}
+        {
+            "warning_time": t,
+            "warning_level": 1,
+            "warning_code": code,
+            "warning_reason": "10",
+            "warning_appear": appear,
+        }
         for t, code, appear in (
             ("2026-08-07 15:41:57", 6, 1),
             ("2026-09-18 11:46:45", 5, 0),
@@ -228,14 +302,25 @@ async def winet_server():
                 return ws
             if service == "param":
                 rows = [{"param_id": 0, "param_pid": -1, "result": -1}] + [
-                    {"param_id": i["param_id"], "param_pid": 0,
-                     "result": param_result["value"]}
+                    {
+                        "param_id": i["param_id"],
+                        "param_pid": 0,
+                        "result": param_result["value"],
+                    }
                     for i in req["list"]
                 ]
-                await ws.send_str(json.dumps({
-                    "result_code": 1,
-                    "result_data": {"service": "param", "count": 1, "list": rows},
-                }))
+                await ws.send_str(
+                    json.dumps(
+                        {
+                            "result_code": 1,
+                            "result_data": {
+                                "service": "param",
+                                "count": 1,
+                                "list": rows,
+                            },
+                        }
+                    )
+                )
                 continue
             if service == "stalist":
                 scan["polls"] += 1
@@ -245,21 +330,35 @@ async def winet_server():
                     if ready
                     else {}
                 )
-                await ws.send_str(json.dumps({
-                    "result_code": 1 if ready else 208,
-                    "result_data": {"service": "stalist", **data},
-                }))
+                await ws.send_str(
+                    json.dumps(
+                        {
+                            "result_code": 1 if ready else 208,
+                            "result_data": {"service": "stalist", **data},
+                        }
+                    )
+                )
                 continue
             if service not in replies:
-                await ws.send_str(json.dumps({
-                    "result_code": 211, "result_msg": "I18N_COMMON_INTER_ABNORMAL",
-                    "result_data": {"service": service},
-                }))
+                await ws.send_str(
+                    json.dumps(
+                        {
+                            "result_code": 211,
+                            "result_msg": "I18N_COMMON_INTER_ABNORMAL",
+                            "result_data": {"service": service},
+                        }
+                    )
+                )
                 continue
-            await ws.send_str(json.dumps({
-                "result_code": 1, "result_msg": "success",
-                "result_data": {"service": service, **replies[service]},
-            }))
+            await ws.send_str(
+                json.dumps(
+                    {
+                        "result_code": 1,
+                        "result_msg": "success",
+                        "result_data": {"service": service, **replies[service]},
+                    }
+                )
+            )
         return ws
 
     def http(path, body):

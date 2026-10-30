@@ -1,9 +1,11 @@
 """Async client for Intelbras solar inverters over the local network."""
+
 from __future__ import annotations
 
-import logging
 from datetime import datetime
+import logging
 from types import TracebackType
+from typing import Self
 
 import aiohttp
 
@@ -78,7 +80,7 @@ class IntelbrasSolarClient:
         self.modbus = ModbusTcpClient(host, port, unit)
         self._firmware: tuple[str | None, str | None] | None = None
 
-    async def __aenter__(self) -> IntelbrasSolarClient:
+    async def __aenter__(self) -> Self:
         return self
 
     async def __aexit__(
@@ -174,7 +176,7 @@ class IntelbrasSolarClient:
         )
 
     async def async_set_power_limit(self, percent: float) -> None:
-        """Set the active power limit, 0–100 % of nominal power."""
+        """Set the active power limit, 0-100 % of nominal power."""
         if not 0 <= percent <= 100:
             raise ValueError("percent must be between 0 and 100")
         await self.modbus.async_write(REG_POWER_LIMIT, round(percent * 10))

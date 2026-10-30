@@ -1,4 +1,7 @@
 """Async Python client for Intelbras solar inverters (Sungrow WiNet-S) over the LAN."""
+
+from importlib import metadata
+
 from .client import IntelbrasSolarClient
 from .const import (
     DEFAULT_PORT,
@@ -39,37 +42,40 @@ from .models import (
 from .winet import WiNetClient
 
 __all__ = [
-    "IntelbrasSolarClient",
-    "InverterStatus",
-    "DataloggerStatus",
-    "DataloggerInfo",
-    "WifiSignal",
-    "GridParameter",
-    "Parameter",
-    "InverterInfo",
-    "FaultEvent",
-    "Mppt",
-    "parse_registers",
-    "parse_datalogger",
-    "parse_datalogger_info",
-    "parse_firmware",
-    "parse_grid_parameters",
-    "parse_parameters",
-    "parse_inverter_info",
-    "parse_fault_history",
-    "ModbusTcpClient",
-    "WiNetClient",
-    "IntelbrasSolarError",
-    "IntelbrasSolarConnectionError",
-    "IntelbrasSolarProtocolError",
     "DEFAULT_PORT",
     "DEFAULT_UNIT",
     "DEFAULT_WINET_PORT",
     "DEVICE_MODELS",
-    "WORK_STATES",
     "FAULT_NAMES",
-    "PARAM_SYSTEM",
     "PARAM_PROTECTION",
+    "PARAM_SYSTEM",
     "REACTIVE_MODES",
+    "WORK_STATES",
+    "DataloggerInfo",
+    "DataloggerStatus",
+    "FaultEvent",
+    "GridParameter",
+    "IntelbrasSolarClient",
+    "IntelbrasSolarConnectionError",
+    "IntelbrasSolarError",
+    "IntelbrasSolarProtocolError",
+    "InverterInfo",
+    "InverterStatus",
+    "ModbusTcpClient",
+    "Mppt",
+    "Parameter",
+    "WiNetClient",
+    "WifiSignal",
+    "parse_datalogger",
+    "parse_datalogger_info",
+    "parse_fault_history",
+    "parse_firmware",
+    "parse_grid_parameters",
+    "parse_inverter_info",
+    "parse_parameters",
+    "parse_registers",
 ]
-__version__ = "0.4.0"
+try:
+    __version__ = metadata.version("python-intelbras-solar-local")
+except metadata.PackageNotFoundError:  # pragma: no cover
+    __version__ = "0.0.0"

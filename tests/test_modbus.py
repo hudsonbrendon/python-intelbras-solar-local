@@ -1,4 +1,5 @@
 """Tests for the Modbus TCP transport."""
+
 from __future__ import annotations
 
 import pytest

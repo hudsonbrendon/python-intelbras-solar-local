@@ -2,10 +2,11 @@
 
 Usage: python examples/status.py 192.168.31.17
 """
+
 import asyncio
+from dataclasses import asdict
 import json
 import sys
-from dataclasses import asdict
 
 from intelbras_solar_local import IntelbrasSolarClient
 

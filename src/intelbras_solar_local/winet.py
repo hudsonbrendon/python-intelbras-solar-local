@@ -3,13 +3,14 @@
 No login is needed to read: ``connect`` hands out a session token that the
 other WebSocket services and the HTTP endpoints accept.
 """
+
 from __future__ import annotations
 
 import asyncio
-import json
-import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+import json
+import time
 from typing import Any
 
 import aiohttp
@@ -146,7 +147,10 @@ class WiNetClient:
         self._timeout = timeout
 
     @asynccontextmanager
-    async def _open(self, timeout: float | None = None) -> AsyncIterator[_Session]:
+    async def _open(
+        self,
+        timeout: float | None = None,  # noqa: ASYNC109
+    ) -> AsyncIterator[_Session]:
         try:
             async with asyncio.timeout(timeout or self._timeout):
                 ws, token = await self._async_connect()
@@ -186,7 +190,7 @@ class WiNetClient:
         async with self._open() as s:
             state = await s.call("state")
             faults = await s.call("fault")
-            devices = await s.call("devicelist", type="0", is_check_token="0")
+            devices = await s.call("devicelist", type="0", is_check_token="0")  # noqa: S106
         return parse_datalogger(state, faults, devices)
 
     async def async_get_info(self) -> DataloggerInfo:
@@ -279,8 +283,10 @@ class WiNetClient:
                 park_serial=int(time.time() * 1000),
             )
         results = [r for r in reply.get("list") or [] if r.get("param_pid", -1) != -1]
-        if not any(r.get("param_id") == param.param_id and r.get("result") == 0
-                   for r in results):
+        if not any(
+            r.get("param_id") == param.param_id and r.get("result") == 0
+            for r in results
+        ):
             raise IntelbrasSolarProtocolError(
                 f"WiNet param: inverter rejected {param.key}={raw}"
             )
@@ -332,17 +338,20 @@ def _raw_parameter_value(param: Parameter, value: float | str) -> str:
             raise ValueError(f"{param.key}: {value!r} not in {sorted(param.options)}")
         return param.options[str(value)]
     number = float(value)
-    if param.minimum is not None and param.maximum is not None:
-        if not param.minimum <= number <= param.maximum:
-            raise ValueError(
-                f"{param.key}: {number} outside [{param.minimum}, {param.maximum}]"
-            )
+    if (
+        param.minimum is not None
+        and param.maximum is not None
+        and not param.minimum <= number <= param.maximum
+    ):
+        raise ValueError(
+            f"{param.key}: {number} outside [{param.minimum}, {param.maximum}]"
+        )
     return f"{number:.{param.accuracy}f}"
 
 
 async def _first_device(s: _Session) -> dict[str, str] | None:
     """``dev_id``/``dev_type``/``dev_code`` of the first device, as strings."""
-    devices = await s.call("devicelist", type="0", is_check_token="0")
+    devices = await s.call("devicelist", type="0", is_check_token="0")  # noqa: S106
     dev = (devices.get("list") or [None])[0]
     if dev is None:
         return None

@@ -1,4 +1,5 @@
 """Tests for register and datalogger parsing."""
+
 from __future__ import annotations
 
 from datetime import datetime
